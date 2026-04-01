@@ -2,13 +2,14 @@
 
 ![Claw Dev cover art](assets/readme/claw-dev-cover.jpg)
 
-Claw Dev is a coding workspace with three real surfaces:
+Claw Dev builds on the original launcher-first codebase and extends it with four connected surfaces:
 
 - a browser GUI
 - a terminal coding interface
+- the original bundled launcher
 - a Telegram bot
 
-It is built around one shared agent core so model selection, local tools, and provider behavior stay consistent across all three.
+The original bundled launcher stays first-class. The browser GUI, direct TUI, and Telegram bot are layered onto that foundation so model selection, local tools, and provider behavior stay aligned across the whole project.
 
 ## Highlights
 
@@ -54,6 +55,18 @@ You can also run one-shot prompts:
 ```bash
 npm run dev -- "summarize this repo"
 ```
+
+### Bundled Launcher
+
+Use the original bundled launcher when you want the heavier terminal workflow and behavior that came with the starting codebase.
+
+Launch it with:
+
+```bash
+npm run claw-dev
+```
+
+This is the core path the project builds on.
 
 ### Telegram
 
@@ -141,6 +154,7 @@ npm run gui:start
 npm run gui:stop
 npm run gui:status
 
+npm run claw-dev
 npm run tui
 npm run dev -- --interactive
 
@@ -163,6 +177,8 @@ npm test
   - shared auth and provider helpers
 - `tests/`
   - regression and integration-oriented tests
+- `Leonxlnx-claude-code/`
+  - the original bundled launcher and terminal client that the newer surfaces build on
 - `index.html`
   - browser GUI
 

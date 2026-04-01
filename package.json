@@ -1,7 +1,7 @@
 {
   "name": "claw-dev-workspace",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "description": "Claw Dev workspace with a multi-provider launcher and Anthropic-compatible proxy.",
   "scripts": {
@@ -25,8 +25,10 @@
     "install:launch-agent": "/bin/zsh ./scripts/install-launch-agent.sh",
     "install:desktop": "./scripts/install-desktop-shortcut.sh",
     "postinstall": "./scripts/postinstall.sh",
+    "claw-dev": "node Leonxlnx-claude-code/claw-dev-launcher.js",
     "proxy:compat": "tsx src/anthropicCompatProxy.ts",
     "proxy:gemini": "tsx src/anthropicCompatProxy.ts",
+    "direct-start": "node dist/index.js",
     "test": "npm run build && node --test tests/*.test.mjs"
   },
   "engines": {

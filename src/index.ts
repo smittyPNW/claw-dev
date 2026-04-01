@@ -9,7 +9,7 @@ import { toolDefinitions } from "./tools.js";
 
 type ParsedArgs = {
   cwd: string;
-  provider?: "anthropic" | "gemini" | "openrouter" | "ollama";
+  provider?: "anthropic" | "gemini" | "openai" | "openrouter" | "ollama";
   model?: string;
   prompt?: string;
   showHelp: boolean;
@@ -21,13 +21,14 @@ function printHelp(): void {
   process.stdout.write(`Usage:\n`);
   process.stdout.write(`  npm run dev\n`);
   process.stdout.write(`  npm run dev -- "summarize this project"\n`);
+  process.stdout.write(`  npm run dev -- --provider openai --model gpt-5-mini "review this repo"\n`);
   process.stdout.write(`  npm run dev -- --provider openrouter --model anthropic/claude-sonnet-4 "review this repo"\n`);
   process.stdout.write(`  npm run dev -- --provider ollama --model qwen3 --cwd E:\\\\repo "inspect this project"\n\n`);
   process.stdout.write(`Flags:\n`);
   process.stdout.write(`  --help   Show this help text\n`);
   process.stdout.write(`  --tools  List available local tools\n`);
   process.stdout.write(`  --cwd    Set the workspace root\n`);
-  process.stdout.write(`  --provider  Choose anthropic, gemini, openrouter, or ollama\n`);
+  process.stdout.write(`  --provider  Choose anthropic, gemini, openai, openrouter, or ollama\n`);
   process.stdout.write(`  --model  Override the model for the chosen provider\n`);
 }
 
@@ -40,7 +41,7 @@ function printTools(): void {
 
 function parseArgs(argv: string[]): ParsedArgs {
   let cwd = process.cwd();
-  let provider: "anthropic" | "gemini" | "openrouter" | "ollama" | undefined;
+  let provider: "anthropic" | "gemini" | "openai" | "openrouter" | "ollama" | undefined;
   let model: string | undefined;
   const promptParts: string[] = [];
   let showHelp = false;
@@ -66,7 +67,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (arg === "--provider") {
       const next = argv[i + 1];
-      if (next === "anthropic" || next === "gemini" || next === "openrouter" || next === "ollama") {
+      if (next === "anthropic" || next === "gemini" || next === "openai" || next === "openrouter" || next === "ollama") {
         provider = next;
       }
       i += 1;

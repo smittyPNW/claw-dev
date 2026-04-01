@@ -25,6 +25,22 @@ test("loadConfig supports openrouter in the top-level app path", () => {
   assert.equal(config.baseUrl, "https://openrouter.ai/api/v1");
 });
 
+test("loadConfig supports openai in the top-level app path with saved auth", () => {
+  const futureExp = Math.floor(Date.now() / 1000) + 3600;
+  process.env = {
+    ...ORIGINAL_ENV,
+    LLM_PROVIDER: "openai",
+    OPENAI_MODEL: "gpt-5-mini",
+    OPENAI_API_KEY: "",
+    OPENAI_AUTH_TOKEN: `header.${Buffer.from(JSON.stringify({ exp: futureExp })).toString("base64url")}.sig`,
+  };
+
+  const config = loadConfig();
+  assert.equal(config.provider, "openai");
+  assert.equal(config.model, "gpt-5-mini");
+  assert.match(config.apiKey, /\./);
+});
+
 test("loadConfig gives a direct OpenRouter setup hint when the key is missing", () => {
   process.env = {
     ...ORIGINAL_ENV,

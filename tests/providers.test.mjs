@@ -4,7 +4,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { OllamaProvider, OpenRouterProvider } from "../dist/providers.js";
+import { OllamaProvider, OpenAIProvider, OpenRouterProvider } from "../dist/providers.js";
+
+function buildJwtWithExp(expSeconds) {
+  const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ exp: expSeconds })).toString("base64url");
+  return `${header}.${payload}.sig`;
+}
 
 test("OpenRouterProvider sends requests to the configured base URL with auth", async () => {
   const originalFetch = globalThis.fetch;
@@ -44,6 +50,52 @@ test("OpenRouterProvider sends requests to the configured base URL with auth", a
     assert.equal(calls[0].init.headers.Authorization, "Bearer or-test-key");
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("OpenAIProvider can use saved ChatGPT auth and call the responses endpoint", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = process.env;
+  const calls = [];
+  const futureExp = Math.floor(Date.now() / 1000) + 3600;
+
+  process.env = {
+    ...originalEnv,
+    OPENAI_AUTH_TOKEN: buildJwtWithExp(futureExp),
+    OPENAI_API_KEY: "",
+  };
+
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init });
+    return new Response(
+      [
+        'event: response.output_item.done',
+        'data: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","id":"msg-1","content":[{"type":"output_text","text":"hello from chatgpt session"}]}}',
+        "",
+        'event: response.completed',
+        'data: {"type":"response.completed","response":{"id":"resp-1"}}',
+        "",
+      ].join("\n"),
+      {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      },
+    );
+  };
+
+  try {
+    const provider = new OpenAIProvider({
+      model: "gpt-5-mini",
+      cwd: process.cwd(),
+    });
+
+    const result = await provider.runTurn("say hello");
+    assert.equal(result.text, "hello from chatgpt session");
+    assert.equal(calls[0].url, "https://chatgpt.com/backend-api/codex/responses");
+    assert.match(calls[0].init.headers.Authorization, /^Bearer /);
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.env = originalEnv;
   }
 });
 

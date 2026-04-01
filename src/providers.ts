@@ -1,7 +1,16 @@
+import { randomUUID } from "node:crypto";
+
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { FunctionCallingConfigMode, GoogleGenAI } from "@google/genai";
 
+import { formatOpenAIAuthHint, resolveOpenAIAuth } from "../shared/openaiAuth.js";
+import {
+  openAICompatibleMessagesToResponsesInput,
+  openAICompatibleToolsToResponsesTools,
+  parseResponsesSseToResult,
+  sliceResponsesInputToLatestToolTurn,
+} from "../shared/openaiResponsesCompat.js";
 import { toolDefinitions, toolHandlers } from "./tools.js";
 
 export type AgentTurnResult = {
@@ -30,7 +39,7 @@ export type TurnEvent =
 
 export type TurnEventHandler = (event: TurnEvent) => void;
 
-export type ProviderName = "anthropic" | "gemini" | "openrouter" | "ollama";
+export type ProviderName = "anthropic" | "gemini" | "openai" | "openrouter" | "ollama";
 
 const SYSTEM_PROMPT = `
 You are Claw Dev, a terminal coding assistant.
@@ -380,6 +389,8 @@ type OpenAICompatibleMessage = {
   }>;
 };
 
+type ProviderToolCall = NonNullable<OpenAICompatibleMessage["tool_calls"]>[number];
+
 type OpenAICompatibleResponse = {
   choices?: Array<{
     message?: {
@@ -571,6 +582,281 @@ class OpenAICompatibleProvider implements LlmProvider {
   }
 }
 
+export class OpenAIProvider implements LlmProvider {
+  private readonly model: string;
+  private readonly cwd: string;
+  private readonly messages: OpenAICompatibleMessage[] = [];
+  private readonly auth = resolveOpenAIAuth({ env: process.env });
+
+  constructor(args: { model: string; cwd: string }) {
+    this.model = args.model;
+    this.cwd = args.cwd;
+  }
+
+  clear(): void {
+    this.messages.length = 0;
+  }
+
+  async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
+    if (this.auth.status !== "ok") {
+      throw new Error(formatOpenAIAuthHint(this.auth));
+    }
+    const auth = this.auth;
+
+    this.messages.push({
+      role: "user",
+      content: prompt,
+    });
+    emitTurnEvent(onEvent, {
+      type: "status",
+      stage: "queued",
+      message: this.auth.authType === "oauth" ? "Prompt queued for ChatGPT session." : "Prompt queued for OpenAI API.",
+    });
+
+    let assistantText = "";
+
+    for (let i = 0; i < 8; i += 1) {
+      emitTurnEvent(onEvent, {
+        type: "status",
+        stage: "requesting",
+        message: `${this.auth.authType === "oauth" ? "Requesting ChatGPT" : "Requesting OpenAI"} response${i > 0 ? ` (pass ${i + 1})` : ""}.`,
+      });
+
+      const turnResult: { assistantText: string; toolCalls: ProviderToolCall[] } =
+        auth.authType === "oauth"
+          ? await this.requestChatGptResponses()
+          : await this.requestOpenAIApi();
+
+      assistantText = turnResult.assistantText || assistantText;
+
+      this.messages.push({
+        role: "assistant",
+        content: turnResult.assistantText,
+        ...(turnResult.toolCalls.length > 0 ? { tool_calls: turnResult.toolCalls } : {}),
+      });
+
+      if (turnResult.toolCalls.length === 0) {
+        emitTurnEvent(onEvent, {
+          type: "status",
+          stage: "complete",
+          message: auth.authType === "oauth" ? "ChatGPT response complete." : "OpenAI response complete.",
+        });
+        return { text: assistantText };
+      }
+
+      emitTurnEvent(onEvent, {
+        type: "status",
+        stage: "tooling",
+        message: `Running ${turnResult.toolCalls.length} tool${turnResult.toolCalls.length === 1 ? "" : "s"}.`,
+      });
+
+      for (const [index, call] of turnResult.toolCalls.entries()) {
+        const name = call.function?.name?.trim() || "";
+        const callId = call.id?.trim() || `tool-call-${index + 1}`;
+        const handler = toolHandlers[name];
+
+        if (!handler) {
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: name,
+            callId,
+            isError: true,
+            contentPreview: `Unknown tool: ${name}`,
+          });
+          this.messages.push({
+            role: "tool",
+            tool_call_id: callId,
+            content: `Unknown tool: ${name}`,
+          });
+          continue;
+        }
+
+        try {
+          const rawArgs = call.function?.arguments ?? "{}";
+          const input = parseJsonRecord(rawArgs);
+          emitTurnEvent(onEvent, {
+            type: "tool_start",
+            toolName: name,
+            callId,
+            inputSummary: summarizeToolInput(input),
+          });
+          const resultContent = await handler(input, this.cwd);
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: name,
+            callId,
+            isError: resultContent.isError ?? false,
+            contentPreview: summarizeToolContent(resultContent.content),
+          });
+          this.messages.push({
+            role: "tool",
+            tool_call_id: callId,
+            content: resultContent.content,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: name,
+            callId,
+            isError: true,
+            contentPreview: summarizeToolContent(message),
+          });
+          this.messages.push({
+            role: "tool",
+            tool_call_id: callId,
+            content: message,
+          });
+        }
+      }
+    }
+
+    return {
+      text: assistantText || "Stopped after reaching the tool iteration limit.",
+    };
+  }
+
+  private async requestChatGptResponses(): Promise<{
+    assistantText: string;
+    toolCalls: ProviderToolCall[];
+  }> {
+    if (this.auth.status !== "ok") {
+      throw new Error(formatOpenAIAuthHint(this.auth));
+    }
+    const auth = this.auth;
+    const responseTools = openAICompatibleToolsToResponsesTools(
+      toolDefinitions.map((tool) => ({
+        type: "function",
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.input_schema,
+        },
+      })),
+    );
+    const rawInput = sliceResponsesInputToLatestToolTurn(openAICompatibleMessagesToResponsesInput(this.messages));
+    const compactRequest = compactOpenAIResponsesRequest(SYSTEM_PROMPT, rawInput, responseTools);
+
+    const response = await fetch("https://chatgpt.com/backend-api/codex/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        Authorization: `Bearer ${auth.bearerToken}`,
+        ...("accountId" in auth && auth.accountId ? { "ChatGPT-Account-Id": auth.accountId } : {}),
+        "User-Agent": "codex-cli/0.117.0",
+        originator: "codex_cli_rs",
+        "x-client-request-id": randomUUID(),
+      },
+      body: JSON.stringify({
+        model: this.model,
+        instructions: compactRequest.instructions,
+        input: compactRequest.input,
+        tools: compactRequest.tools,
+        tool_choice: compactRequest.tools.length > 0 ? "auto" : "none",
+        parallel_tool_calls: true,
+        reasoning: { effort: "none" },
+        store: false,
+        stream: true,
+        include: [],
+        text: {
+          format: { type: "text" },
+          verbosity: "medium",
+        },
+      }),
+    });
+
+    const sseText = await response.text();
+    if (!response.ok) {
+      throw new Error(`ChatGPT request failed with status ${response.status}. ${sseText.slice(0, 400)}`);
+    }
+
+    const parsed = parseResponsesSseToResult(sseText);
+    return {
+      assistantText: parsed.content
+        .filter((block) => block.type === "text")
+        .map((block) => block.text)
+        .join("\n"),
+      toolCalls: parsed.content
+        .filter(
+          (
+            block,
+          ): block is {
+            type: "tool_use";
+            id: string;
+            name: string;
+            input: Record<string, unknown>;
+          } => block.type === "tool_use",
+        )
+        .map((block): ProviderToolCall => ({
+          id: block.id,
+          type: "function" as const,
+          function: {
+            name: block.name,
+            arguments: JSON.stringify(block.input ?? {}),
+          },
+        })),
+    };
+  }
+
+  private async requestOpenAIApi(): Promise<{
+    assistantText: string;
+    toolCalls: ProviderToolCall[];
+  }> {
+    if (this.auth.status !== "ok") {
+      throw new Error(formatOpenAIAuthHint(this.auth));
+    }
+    const auth = this.auth;
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${auth.bearerToken}`,
+      },
+      body: JSON.stringify({
+        model: this.model,
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...this.messages],
+        tools: toolDefinitions.map((tool) => ({
+          type: "function",
+          function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.input_schema,
+          },
+        })),
+      }),
+    });
+
+    const json = (await response.json()) as OpenAICompatibleResponse;
+    if (!response.ok) {
+      throw new Error(formatOpenAICompatibleProviderError("https://api.openai.com/v1", this.model, response.status, json));
+    }
+
+    const message = json.choices?.[0]?.message;
+    const toolCalls = (message?.tool_calls ?? [])
+      .map((call, index): ProviderToolCall | null => {
+        const name = call.function?.name?.trim();
+        if (!name) {
+          return null;
+        }
+        return {
+          id: call.id?.trim() || `tool-call-${index + 1}`,
+          type: "function" as const,
+          function: {
+            name,
+            arguments: call.function?.arguments ?? "{}",
+          },
+        };
+      })
+      .filter((call): call is NonNullable<typeof call> => call !== null);
+
+    return {
+      assistantText: typeof message?.content === "string" ? message.content : "",
+      toolCalls,
+    };
+  }
+}
+
 export class OpenRouterProvider extends OpenAICompatibleProvider {
   constructor(args: { apiKey: string; model: string; cwd: string; baseUrl?: string }) {
     super({
@@ -618,6 +904,42 @@ function parseJsonRecord(value: string): Record<string, unknown> {
 function normalizeOllamaBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/$/, "");
   return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
+}
+
+function compactOpenAIResponsesRequest(
+  instructions: string,
+  input: Array<Record<string, unknown>>,
+  tools: Array<Record<string, unknown>>,
+) {
+  const budget = 12000;
+  let compactInput = [...input];
+  let compactTools = [...tools];
+
+  while (estimateOpenAIResponsesPayload(instructions, compactInput, compactTools) > budget && compactInput.length > 4) {
+    compactInput = compactInput.slice(1);
+  }
+
+  if (estimateOpenAIResponsesPayload(instructions, compactInput, compactTools) > budget && compactTools.length > 12) {
+    compactTools = compactTools.slice(0, 12);
+  }
+
+  if (estimateOpenAIResponsesPayload(instructions, compactInput, compactTools) > budget && compactTools.length > 6) {
+    compactTools = compactTools.slice(0, 6);
+  }
+
+  return {
+    instructions,
+    input: compactInput,
+    tools: compactTools,
+  };
+}
+
+function estimateOpenAIResponsesPayload(
+  instructions: string,
+  input: Array<Record<string, unknown>>,
+  tools: Array<Record<string, unknown>>,
+): number {
+  return Math.ceil((instructions.length + JSON.stringify(input).length + JSON.stringify(tools).length) / 4);
 }
 
 function formatOpenAICompatibleProviderError(

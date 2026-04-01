@@ -960,7 +960,7 @@
                 <button class="ghost" id="refresh-openrouter" type="button" hidden>Refresh Free Models</button>
               </div>
             </div>
-            <p id="spotlight-secondary">OpenRouter highlights currently free hosted choices. Ollama is biased toward smaller local coding models.</p>
+            <p id="spotlight-secondary">ChatGPT can become the default lane when saved auth is present. OpenRouter highlights current free hosted choices, and Ollama is biased toward smaller local coding models.</p>
           </div>
 
           <label>
@@ -1255,6 +1255,7 @@
         .join("");
 
       const preferred = payload.providers.find((provider) => provider.value === currentProvider)
+        || payload.providers.find((provider) => provider.value === "openai" && provider.status === "configured")
         || payload.providers.find((provider) => provider.value === "openrouter" && provider.status !== "missing-key")
         || payload.providers.find((provider) => provider.status === "configured")
         || payload.providers.find((provider) => provider.value === "openrouter")
@@ -1553,6 +1554,10 @@
         badges.push({ label: "Hosted", tone: "recommended" });
         badges.push({ label: "Free heartbeat", tone: "free" });
       }
+      if (provider.value === "openai") {
+        badges.push({ label: "Default lane", tone: "recommended" });
+        badges.push({ label: "ChatGPT auth", tone: "free" });
+      }
       if (provider.value === "ollama") {
         badges.push({ label: "Local", tone: "local" });
         badges.push({ label: "Coding-biased", tone: "recommended" });
@@ -1816,6 +1821,15 @@
           return `${heartbeatLine} This choice keeps hosted usage on the currently free OpenRouter lane and prefers the strongest available free option.`;
         }
         return `${heartbeatLine} OpenRouter options mix premium hosted models with currently free lanes, and the picker ranks larger free coding-capable models like MiniMax, Nemotron, Qwen, or GPT-OSS higher when they are available.`;
+      }
+
+      if (provider === "openai") {
+        const selectedProvider = getSelectedProviderMeta();
+        const auth = selectedProvider?.auth;
+        if (auth?.authType === "oauth") {
+          return "This lane is using the saved ChatGPT/Codex session token on this machine, so it can act as the default overall provider without requiring an API key.";
+        }
+        return "This lane uses OpenAI directly. If a saved ChatGPT session is unavailable, the app falls back to OPENAI_API_KEY.";
       }
 
       if (provider === "ollama") {

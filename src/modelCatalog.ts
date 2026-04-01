@@ -50,7 +50,7 @@ let openRouterCache:
   | undefined;
 
 export async function getGuiModelGroups(
-  provider: "anthropic" | "gemini" | "openrouter" | "ollama",
+  provider: "anthropic" | "gemini" | "openai" | "openrouter" | "ollama",
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<GuiModelGroup[]> {
   if (provider === "anthropic") {
@@ -98,6 +98,46 @@ export async function getGuiModelGroups(
             value: "gemini-2.5-pro",
             label: "Gemini 2.5 Pro",
             description: "Stronger reasoning for larger tasks.",
+          },
+        ]),
+      },
+    ];
+  }
+
+  if (provider === "openai") {
+    return [
+      {
+        id: "chatgpt",
+        label: "ChatGPT and OpenAI Models",
+        options: uniqueOptions([
+          {
+            value: env.OPENAI_MODEL?.trim() || "gpt-5-mini",
+            label: env.OPENAI_MODEL?.trim() || "gpt-5-mini",
+            description: "Configured default for ChatGPT or OpenAI in the direct app path.",
+            badge: "Default",
+            emphasis: "recommended",
+          },
+          {
+            value: "gpt-5-mini",
+            label: "GPT-5 Mini",
+            description: "Fast default for coding and repo exploration.",
+            badge: "Recommended",
+            emphasis: "recommended",
+          },
+          {
+            value: "gpt-5.2",
+            label: "GPT-5.2",
+            description: "Stronger general reasoning for heavier coding work.",
+          },
+          {
+            value: "gpt-5.2-codex",
+            label: "GPT-5.2 Codex",
+            description: "Coding-focused OpenAI model when you want a heavier tool-using lane.",
+          },
+          {
+            value: "o4-mini",
+            label: "o4-mini",
+            description: "Smaller reasoning-heavy option for iterative work.",
           },
         ]),
       },

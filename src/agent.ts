@@ -1,6 +1,7 @@
 import {
   AnthropicProvider,
   GeminiProvider,
+  OpenAIProvider,
   OllamaProvider,
   OpenRouterProvider,
   type LlmProvider,
@@ -16,6 +17,14 @@ export class CodingAgent {
   private readonly provider: LlmProvider;
 
   constructor(args: { provider: ProviderName; apiKey: string; model: string; cwd: string; baseUrl?: string }) {
+    if (args.provider === "openai") {
+      this.provider = new OpenAIProvider({
+        model: args.model,
+        cwd: args.cwd,
+      });
+      return;
+    }
+
     if (args.provider === "gemini") {
       this.provider = new GeminiProvider({
         apiKey: args.apiKey,

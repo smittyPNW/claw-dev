@@ -343,12 +343,19 @@
       color: var(--warning);
     }
 
+    .status-missing-auth,
+    .status-expired {
+      color: var(--warning);
+    }
+
     .status-local {
       color: #9ec7ff;
     }
 
     .provider-detail,
     .provider-model,
+    .auth-detail,
+    .auth-support,
     .session-subline,
     .activity-copy,
     .empty p {
@@ -407,6 +414,51 @@
       padding: 14px;
       display: grid;
       gap: 10px;
+    }
+
+    .auth-panel {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03)),
+        radial-gradient(circle at top right, rgba(217, 114, 66, 0.16), transparent 44%);
+    }
+
+    .auth-panel-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .auth-panel h4 {
+      font-size: 14px;
+    }
+
+    .auth-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .auth-detail,
+    .auth-support {
+      margin: 0;
+    }
+
+    .auth-command {
+      margin: 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.88);
+      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+      font-size: 12px;
+      overflow-wrap: anywhere;
     }
 
     .model-spotlight-head {
@@ -991,6 +1043,31 @@
 
         <section class="section">
           <div class="section-head">
+            <h3>ChatGPT Access</h3>
+            <button class="ghost" id="refresh-openai-auth" type="button">Refresh</button>
+          </div>
+          <div class="auth-panel" id="openai-auth-panel">
+            <div class="auth-panel-head">
+              <div>
+                <h4 id="openai-auth-title">Checking local auth...</h4>
+                <p class="auth-detail" id="openai-auth-detail">The GUI is checking whether this machine has a reusable ChatGPT session or API-key fallback.</p>
+              </div>
+              <span class="status-pill" id="openai-auth-status">Loading</span>
+            </div>
+            <div class="auth-meta">
+              <span class="chip"><strong>Source</strong>&nbsp;<span id="openai-auth-source">Waiting</span></span>
+              <span class="chip"><strong>Mode</strong>&nbsp;<span id="openai-auth-type">Unknown</span></span>
+            </div>
+            <p class="auth-support" id="openai-auth-next-action">Waiting for the first auth check.</p>
+            <p class="auth-command" id="openai-auth-command">codex login</p>
+            <div class="button-row">
+              <button class="secondary" id="copy-openai-command" type="button">Copy Command</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
             <h3>Recent Sessions</h3>
             <button class="ghost" id="refresh-sessions" type="button">Refresh</button>
           </div>
@@ -1146,6 +1223,16 @@
     const spotlightSecondaryEl = document.getElementById("spotlight-secondary");
     const spotlightBadgesEl = document.getElementById("spotlight-badges");
     const refreshOpenRouterButton = document.getElementById("refresh-openrouter");
+    const refreshOpenAIAuthButton = document.getElementById("refresh-openai-auth");
+    const openAIAuthPanelEl = document.getElementById("openai-auth-panel");
+    const openAIAuthTitleEl = document.getElementById("openai-auth-title");
+    const openAIAuthDetailEl = document.getElementById("openai-auth-detail");
+    const openAIAuthStatusEl = document.getElementById("openai-auth-status");
+    const openAIAuthSourceEl = document.getElementById("openai-auth-source");
+    const openAIAuthTypeEl = document.getElementById("openai-auth-type");
+    const openAIAuthNextActionEl = document.getElementById("openai-auth-next-action");
+    const openAIAuthCommandEl = document.getElementById("openai-auth-command");
+    const copyOpenAICommandButton = document.getElementById("copy-openai-command");
 
     let metadata = null;
     let session = null;
@@ -1153,6 +1240,7 @@
     let isBusy = false;
     let activity = [];
     let streamingMessageEl = null;
+    let openAIAuthState = null;
 
     const metadataHeartbeatMs = 60000;
 
@@ -1210,6 +1298,8 @@
     });
     refreshSessionsButton.addEventListener("click", refreshSessions);
     refreshOpenRouterButton.addEventListener("click", refreshOpenRouterModels);
+    refreshOpenAIAuthButton.addEventListener("click", refreshOpenAIAuthStatus);
+    copyOpenAICommandButton.addEventListener("click", copyOpenAICommand);
 
     promptEl.addEventListener("keydown", (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -1233,6 +1323,7 @@
 
     async function boot() {
       await refreshMetadata(false, true);
+      await refreshOpenAIAuthStatus(true);
       await refreshSessions();
       setStatus("Ready. Start a session to begin.", false);
       addActivity("Control room ready", `Default lane: ${getSelectedProviderMeta()?.label || "unknown"}.`, "info");
@@ -1277,6 +1368,7 @@
 
       metricProviderCountEl.textContent = String(payload.providers.length);
       renderProviderHealth();
+      syncOpenAIAuthFromMetadata();
       renderProviderSetup();
       renderModelSpotlight();
       syncSignals();
@@ -1323,6 +1415,31 @@
       } catch (error) {
         setStatus(error.message || String(error), true);
         addActivity("OpenRouter refresh failed", error.message || String(error), "error");
+      }
+    }
+
+    async function refreshOpenAIAuthStatus(silent = false) {
+      try {
+        const response = await fetch("/api/auth/openai/status");
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to load ChatGPT auth status.");
+        }
+
+        openAIAuthState = payload.auth;
+        renderOpenAIAuthPanel();
+
+        if (!silent) {
+          setStatus("ChatGPT auth status refreshed.", false);
+          addActivity("ChatGPT auth checked", openAIAuthState.detail, openAIAuthState.status === "configured" ? "success" : "info");
+        }
+      } catch (error) {
+        openAIAuthState = null;
+        renderOpenAIAuthPanel(error.message || String(error));
+        if (!silent) {
+          setStatus(error.message || String(error), true);
+          addActivity("ChatGPT auth check failed", error.message || String(error), "error");
+        }
       }
     }
 
@@ -1515,6 +1632,38 @@
       providerHealthSummaryEl.textContent = `${configuredCount}/${metadata.providers.length} ready`;
     }
 
+    function renderOpenAIAuthPanel(errorMessage = "") {
+      if (!openAIAuthState) {
+        openAIAuthTitleEl.textContent = errorMessage ? "Auth status unavailable" : "Checking local auth...";
+        openAIAuthDetailEl.textContent = errorMessage || "The GUI is checking whether this machine has a reusable ChatGPT session or API-key fallback.";
+        openAIAuthStatusEl.textContent = errorMessage ? "Unavailable" : "Loading";
+        openAIAuthStatusEl.className = "status-pill status-missing-auth";
+        openAIAuthSourceEl.textContent = "Unavailable";
+        openAIAuthTypeEl.textContent = "Unknown";
+        openAIAuthNextActionEl.textContent = errorMessage ? "Try refreshing the panel. If this keeps failing, check the local server output." : "Waiting for the first auth check.";
+        openAIAuthCommandEl.textContent = "codex login";
+        openAIAuthPanelEl.dataset.status = "missing-auth";
+        return;
+      }
+
+      openAIAuthTitleEl.textContent = openAIAuthState.prefersChatGPTSession
+        ? "ChatGPT is ready to act as the default lane."
+        : openAIAuthState.status === "configured"
+          ? "OpenAI access is configured."
+          : openAIAuthState.status === "expired"
+            ? "Saved ChatGPT auth has expired."
+            : "ChatGPT auth still needs setup.";
+      openAIAuthDetailEl.textContent = openAIAuthState.detail;
+      openAIAuthStatusEl.textContent = formatProviderStatus(openAIAuthState.status);
+      openAIAuthStatusEl.className = `status-pill status-${openAIAuthState.status}`;
+      openAIAuthSourceEl.textContent = openAIAuthState.sourceLabel;
+      openAIAuthTypeEl.textContent = formatAuthType(openAIAuthState.authType);
+      openAIAuthNextActionEl.textContent = openAIAuthState.nextAction;
+      openAIAuthCommandEl.textContent = openAIAuthState.actionCommand;
+      copyOpenAICommandButton.textContent = openAIAuthState.actionLabel;
+      openAIAuthPanelEl.dataset.status = openAIAuthState.status;
+    }
+
     function populateModelSelect(provider) {
       const groups = provider?.modelGroups || [];
       if (!groups.length) {
@@ -1644,6 +1793,15 @@
 
       setupSummaryEl.textContent = `${selected.label} ${formatProviderStatus(selected.status)}`;
       setupSummaryEl.className = `status-pill status-${selected.status}`;
+    }
+
+    function syncOpenAIAuthFromMetadata() {
+      const openAIProvider = metadata?.providers?.find((provider) => provider.value === "openai");
+      if (!openAIProvider?.auth) {
+        return;
+      }
+      openAIAuthState = openAIProvider.auth;
+      renderOpenAIAuthPanel();
     }
 
     function syncSignals() {
@@ -1786,12 +1944,27 @@
       switch (status) {
         case "configured":
           return "ready";
+        case "missing-auth":
+          return "needs auth";
         case "missing-key":
           return "needs key";
+        case "expired":
+          return "expired";
         case "local":
           return "local";
         default:
           return status;
+      }
+    }
+
+    function formatAuthType(authType) {
+      switch (authType) {
+        case "oauth":
+          return "ChatGPT session";
+        case "api-key":
+          return "API key";
+        default:
+          return "Not configured";
       }
     }
 
@@ -1874,6 +2047,18 @@
       article.innerHTML = createMessageMarkup("assistant", text);
       article.classList.remove("streaming");
       transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    }
+
+    async function copyOpenAICommand() {
+      const command = openAIAuthCommandEl.textContent.trim();
+      try {
+        await navigator.clipboard.writeText(command);
+        setStatus("Command copied. Run it in a terminal to refresh ChatGPT auth.", false);
+        addActivity("Command copied", command, "info");
+      } catch {
+        setStatus("Clipboard copy failed. The command is still visible in the ChatGPT access panel.", true);
+        addActivity("Clipboard copy failed", command, "error");
+      }
     }
 
     async function readNdjsonStream(stream, onEvent) {

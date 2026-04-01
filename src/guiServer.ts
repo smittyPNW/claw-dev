@@ -6,9 +6,9 @@ import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { formatOpenAIAuthHint, resolveOpenAIAuth } from "../shared/openaiAuth.js";
 import { CodingAgent } from "./agent.js";
 import { loadConfig } from "./config.js";
+import { getOpenAIAuthPanelState } from "./guiAuth.js";
 import { getGuiModelGroups, getOpenRouterCatalogState, startOpenRouterHeartbeat } from "./modelCatalog.js";
 import type { ProviderName } from "./providers.js";
 
@@ -58,7 +58,7 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
 
     if (req.method === "GET" && url.pathname === "/api/meta") {
-      const openAiAuth = resolveOpenAIAuth({ env: process.env });
+      const openAiAuth = getOpenAIAuthPanelState({ env: process.env });
       const [anthropicModels, geminiModels, openAiModels, openRouterState, ollamaModels] = await Promise.all([
         getGuiModelGroups("anthropic"),
         getGuiModelGroups("gemini"),
@@ -91,18 +91,10 @@ const server = createServer(async (req, res) => {
             value: "openai",
             label: "ChatGPT",
             defaultModel: process.env.OPENAI_MODEL || "gpt-5-mini",
-            status: openAiAuth.status === "ok" ? "configured" : openAiAuth.status === "expired" ? "missing-key" : "missing-key",
-            detail:
-              openAiAuth.status === "ok"
-                ? openAiAuth.authType === "oauth"
-                  ? `Using saved ChatGPT session from ${openAiAuth.authPath}.`
-                  : "Using OPENAI_API_KEY from the environment."
-                : formatOpenAIAuthHint(openAiAuth),
+            status: openAiAuth.status,
+            detail: openAiAuth.shortDetail,
             modelGroups: openAiModels,
-            auth: {
-              authType: openAiAuth.authType,
-              source: openAiAuth.status === "ok" ? openAiAuth.source : openAiAuth.reason,
-            },
+            auth: openAiAuth,
           },
           {
             value: "openrouter",
@@ -129,6 +121,13 @@ const server = createServer(async (req, res) => {
             modelGroups: ollamaModels,
           },
         ],
+      });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/auth/openai/status") {
+      return sendJson(res, 200, {
+        ok: true,
+        auth: getOpenAIAuthPanelState({ env: process.env }),
       });
     }
 

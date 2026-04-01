@@ -238,7 +238,7 @@ function defaultPortFor(provider: CompatProvider): string {
 function resolveModel(provider: CompatProvider): string {
   switch (provider) {
     case "openai":
-      return process.env.OPENAI_MODEL?.trim() || "gpt-5-mini";
+      return process.env.OPENAI_MODEL?.trim() || "gpt-5.2-codex";
     case "gemini":
       return process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
     case "groq":
@@ -252,6 +252,20 @@ function resolveModel(provider: CompatProvider): string {
     case "zai":
       return process.env.ZAI_MODEL?.trim() || "glm-5";
   }
+}
+
+function resolveOpenAIReasoningEffort(model: string): "low" | "medium" | "high" | "xhigh" {
+  const normalized = model.trim().toLowerCase();
+
+  if (normalized.includes("codex")) {
+    return "medium";
+  }
+
+  if (normalized.startsWith("gpt-5") || normalized.startsWith("o3") || normalized.startsWith("o4")) {
+    return "medium";
+  }
+
+  return "low";
 }
 
 function assertProviderConfiguration(): void {
@@ -574,7 +588,7 @@ async function runOpenAI(body: AnthropicMessageRequest, model: string): Promise<
           tools: compactRequest.tools,
           tool_choice: buildResponsesToolChoice(body.tool_choice, compactRequest.tools),
           parallel_tool_calls: true,
-          reasoning: { effort: "none" },
+          reasoning: { effort: resolveOpenAIReasoningEffort(model) },
           store: false,
           stream: true,
           include: [],

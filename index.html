@@ -304,6 +304,15 @@
       gap: 8px;
     }
 
+    .provider-item.jumpable {
+      cursor: pointer;
+    }
+
+    .provider-item.jumpable:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
     .provider-row,
     .session-row,
     .activity-row {
@@ -317,6 +326,19 @@
     .session-row strong,
     .activity-row strong {
       font-size: 14px;
+    }
+
+    .provider-action {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+    }
+
+    .provider-action:hover {
+      transform: none;
+      filter: none;
     }
 
     .status-pill,
@@ -447,6 +469,45 @@
         radial-gradient(circle at top right, rgba(217, 114, 66, 0.16), transparent 44%);
     }
 
+    .auth-panel[data-status="local-ready"] {
+      border-color: rgba(111, 214, 165, 0.34);
+      background:
+        linear-gradient(180deg, rgba(95, 201, 149, 0.12), rgba(255, 255, 255, 0.03)),
+        radial-gradient(circle at top right, rgba(111, 214, 165, 0.2), transparent 46%);
+      box-shadow: inset 0 0 0 1px rgba(111, 214, 165, 0.06);
+    }
+
+    .secret-panel {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+        radial-gradient(circle at top right, rgba(255, 161, 103, 0.08), transparent 40%);
+    }
+
+    .section-toggle {
+      padding: 8px 12px;
+      min-width: 88px;
+    }
+
+    .secret-panel-summary {
+      margin: 0;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .secret-panel-body[hidden] {
+      display: none;
+    }
+
     .update-panel {
       border-radius: 18px;
       border: 1px solid var(--line);
@@ -478,6 +539,15 @@
     .auth-detail,
     .auth-support {
       margin: 0;
+    }
+
+    .runtime-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
     }
 
     .update-summary {
@@ -949,6 +1019,395 @@
       }
     }
 
+    /* Refined operator layout pass */
+    body {
+      background:
+        radial-gradient(circle at 20% 0%, rgba(255, 122, 61, 0.12), transparent 22%),
+        radial-gradient(circle at 85% 0%, rgba(70, 123, 255, 0.12), transparent 24%),
+        linear-gradient(180deg, #05070d 0%, #0a0e16 38%, #0d1220 100%);
+    }
+
+    .shell {
+      width: min(1680px, calc(100vw - 24px));
+      margin: 12px auto;
+      grid-template-columns: 276px minmax(0, 1fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(10, 14, 21, 0.94), rgba(13, 18, 29, 0.94));
+      border-color: rgba(255, 255, 255, 0.07);
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(14px);
+    }
+
+    .sidebar {
+      padding: 18px;
+      gap: 16px;
+      border-radius: 28px;
+      max-height: calc(100vh - 24px);
+      overflow: auto;
+      background:
+        linear-gradient(180deg, rgba(10, 14, 21, 0.98), rgba(9, 12, 19, 0.98)),
+        radial-gradient(circle at top right, rgba(255, 122, 61, 0.12), transparent 36%);
+    }
+
+    .sidebar::before {
+      inset: auto -42% 70% 0;
+      height: 160px;
+      background: radial-gradient(circle, rgba(69, 122, 255, 0.16), transparent 70%);
+      filter: blur(18px);
+    }
+
+    .stack {
+      gap: 12px;
+    }
+
+    .brand {
+      grid-template-columns: 76px minmax(0, 1fr);
+      gap: 14px;
+      align-items: center;
+    }
+
+    .brand-mark {
+      width: 76px;
+      height: 76px;
+      border-radius: 18px;
+      border-color: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.03);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+    }
+
+    .brand h1 {
+      font-size: 30px;
+      letter-spacing: -0.04em;
+    }
+
+    .lede {
+      font-size: 13px;
+      color: rgba(244, 235, 224, 0.72);
+    }
+
+    .section {
+      gap: 10px;
+      padding-top: 2px;
+    }
+
+    .section-head h3 {
+      font-size: 14px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .helper,
+    .provider-detail,
+    .provider-model,
+    .auth-detail,
+    .auth-support,
+    .session-subline,
+    .activity-copy,
+    .update-summary,
+    .model-spotlight p {
+      color: rgba(230, 233, 242, 0.64);
+    }
+
+    input,
+    select,
+    textarea {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 12px 13px;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: rgba(255, 143, 84, 0.9);
+      background: rgba(255, 255, 255, 0.06);
+      transform: none;
+      box-shadow: 0 0 0 3px rgba(255, 143, 84, 0.14);
+    }
+
+    button {
+      border-radius: 16px;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, #ca7b40 0%, #f0a15f 100%);
+      color: #fffaf6;
+    }
+
+    .secondary,
+    .ghost {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(250, 244, 237, 0.92);
+    }
+
+    .provider-item,
+    .session-item,
+    .activity-item,
+    .model-spotlight,
+    .auth-panel,
+    .update-panel {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(255, 255, 255, 0.07);
+      border-radius: 20px;
+    }
+
+    .auth-command,
+    .update-command {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 248, 240, 0.88);
+    }
+
+    .main {
+      gap: 14px;
+    }
+
+    .setup-band {
+      padding: 16px 18px;
+      border-radius: 26px;
+      background:
+        linear-gradient(180deg, rgba(10, 14, 21, 0.98), rgba(11, 15, 23, 0.98)),
+        radial-gradient(circle at top left, rgba(255, 122, 61, 0.08), transparent 24%);
+      display: grid;
+      gap: 14px;
+    }
+
+    .setup-grid {
+      display: grid;
+      grid-template-columns: 0.92fr 1.18fr 1.12fr 1.24fr 168px;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .setup-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .setup-band .helper {
+      margin-top: -2px;
+    }
+
+    .masthead {
+      min-height: 0;
+      padding: 16px 18px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: center;
+      border-radius: 28px;
+      background:
+        linear-gradient(180deg, rgba(9, 13, 20, 0.98), rgba(10, 14, 21, 0.98)),
+        radial-gradient(circle at top left, rgba(255, 122, 61, 0.12), transparent 24%);
+    }
+
+    .masthead-copy {
+      display: grid;
+      gap: 8px;
+      align-content: center;
+    }
+
+    .masthead h2 {
+      font-size: clamp(22px, 2.3vw, 34px);
+      max-width: 20ch;
+      letter-spacing: -0.05em;
+    }
+
+    .masthead-copy p {
+      max-width: 60ch;
+      font-size: 12px;
+      color: rgba(232, 236, 244, 0.64);
+      margin: 0;
+    }
+
+    .metric-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .metric {
+      min-width: 128px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .metric strong {
+      font-size: 24px;
+      color: #fff7ef;
+    }
+
+    .metric span {
+      color: rgba(232, 236, 244, 0.62);
+      font-size: 11px;
+    }
+
+    .masthead-visual {
+      display: none;
+    }
+
+    .workspace-grid {
+      grid-template-columns: minmax(0, 1.45fr) 280px;
+      gap: 14px;
+    }
+
+    .workspace-panel {
+      padding: 18px;
+      border-radius: 30px;
+      background:
+        linear-gradient(180deg, rgba(12, 16, 24, 0.98), rgba(9, 13, 20, 0.98)),
+        radial-gradient(circle at top right, rgba(63, 102, 255, 0.08), transparent 26%);
+      color: #eef2fa;
+      border-color: rgba(255, 255, 255, 0.07);
+    }
+
+    .workspace-panel .eyebrow {
+      color: rgba(255, 161, 103, 0.84);
+    }
+
+    .workspace-panel h3,
+    .workspace-panel .activity-row strong,
+    .workspace-panel .provider-row strong,
+    .workspace-panel .session-row strong,
+    .workspace-panel .message-body {
+      color: #eef2fa;
+    }
+
+    .workspace-panel p,
+    .workspace-panel li,
+    .workspace-panel label,
+    .workspace-panel .helper,
+    .workspace-panel .activity-copy,
+    .workspace-panel .mini-copy,
+    .workspace-panel .status-copy {
+      color: rgba(224, 230, 242, 0.68);
+    }
+
+    .signal-bar {
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .chip {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.07);
+      color: rgba(227, 232, 242, 0.72);
+    }
+
+    .chip strong {
+      color: #f8fbff;
+    }
+
+    .transcript-shell {
+      gap: 12px;
+    }
+
+    .transcript {
+      min-height: 58vh;
+      max-height: 68vh;
+      padding: 14px;
+      border-radius: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .message {
+      max-width: min(86%, 920px);
+      padding: 14px 16px;
+      border-radius: 18px;
+      border-color: rgba(255, 255, 255, 0.06);
+      box-shadow: none;
+    }
+
+    .message.user {
+      background: linear-gradient(135deg, rgba(202, 123, 64, 0.28), rgba(87, 42, 20, 0.22));
+    }
+
+    .message.assistant {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .message.system {
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .message .label {
+      color: rgba(224, 230, 242, 0.42);
+    }
+
+    .message-body {
+      font-size: 14px;
+      line-height: 1.6;
+      color: rgba(239, 242, 248, 0.92);
+    }
+
+    .empty {
+      min-height: 44vh;
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .empty h3 {
+      color: #f2f6ff;
+      font-size: 22px;
+    }
+
+    .composer {
+      gap: 10px;
+      padding-top: 4px;
+    }
+
+    .composer textarea {
+      min-height: 112px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .status-line {
+      gap: 10px;
+      align-items: start;
+    }
+
+    .live-badge {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.08);
+      color: rgba(237, 242, 249, 0.8);
+    }
+
+    .dot {
+      background: rgba(255, 255, 255, 0.22);
+    }
+
+    .activity-list {
+      max-height: 480px;
+      padding-right: 4px;
+    }
+
+    .activity-item {
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(255, 255, 255, 0.07);
+      border-radius: 18px;
+    }
+
+    .activity-time {
+      color: rgba(224, 230, 242, 0.42);
+    }
+
     @media (max-width: 1240px) {
       .shell {
         grid-template-columns: 1fr;
@@ -958,16 +1417,24 @@
         position: static;
       }
 
-      .masthead,
       .workspace-grid {
         grid-template-columns: 1fr;
+      }
+
+      .metric-row {
+        max-width: none;
+        justify-content: flex-start;
+      }
+
+      .setup-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
 
     @media (max-width: 720px) {
       .shell {
-        width: min(100vw - 16px, 100%);
-        margin: 8px auto 16px;
+        width: min(100vw - 12px, 100%);
+        margin: 6px auto 12px;
         gap: 12px;
       }
 
@@ -998,19 +1465,28 @@
         font-size: 28px;
       }
 
-      .masthead {
-        min-height: auto;
-      }
-
       .masthead h2 {
-        max-width: 12ch;
-      }
-
-      .masthead-visual {
-        min-height: 280px;
+        max-width: 18ch;
+        font-size: 30px;
       }
 
       .command-list {
+        grid-template-columns: 1fr;
+      }
+
+      .metric-row {
+        grid-template-columns: 1fr;
+      }
+
+      .setup-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .setup-actions {
+        justify-content: stretch;
+      }
+
+      .workspace-grid {
         grid-template-columns: 1fr;
       }
 
@@ -1026,61 +1502,13 @@
       <div class="stack">
         <section class="brand">
           <div class="brand-mark">
-            <img src="/assets/readme/chatgpt-worx.png" alt="Claw Dev brand image">
+            <img src="/assets/readme/claw-dev-cover.jpg" alt="Claw Dev brand image">
           </div>
           <div>
-            <p class="eyebrow">Local Control Room</p>
-            <h1>Claw Dev UI</h1>
-            <p class="lede">A browser front end for the direct TypeScript agent path, with OpenRouter and Ollama ready for local work.</p>
+            <p class="eyebrow">Local App</p>
+            <h1>Claw Dev</h1>
+            <p class="lede">Local coding assistant with ChatGPT, OpenRouter, and Ollama in one workspace.</p>
           </div>
-        </section>
-
-        <section class="section">
-          <div class="section-head">
-            <h3>Session Setup</h3>
-            <span class="status-pill" id="setup-summary">Waiting</span>
-          </div>
-
-          <label>
-            Provider
-            <select id="provider"></select>
-          </label>
-
-          <label>
-            Suggested Model
-            <select id="model-select"></select>
-          </label>
-
-          <div class="model-spotlight" id="model-spotlight">
-            <div class="model-spotlight-head">
-              <div>
-                <h4 id="spotlight-title">Model guidance</h4>
-                <p id="spotlight-description">Pick a provider to see the strongest default model lane.</p>
-              </div>
-              <div style="display:grid; gap:8px; justify-items:end;">
-                <div class="spotlight-badges" id="spotlight-badges"></div>
-                <button class="ghost" id="refresh-openrouter" type="button" hidden>Refresh Free Models</button>
-              </div>
-            </div>
-            <p id="spotlight-secondary">ChatGPT can become the default lane when saved auth is present. OpenRouter highlights current free hosted choices, and Ollama is biased toward smaller local coding models.</p>
-          </div>
-
-          <label>
-            Custom Model Override
-            <input id="model" type="text" placeholder="anthropic/claude-sonnet-4">
-          </label>
-
-          <label>
-            Workspace
-            <input id="cwd" type="text" placeholder="/path/to/repo">
-          </label>
-
-          <div class="button-row">
-            <button class="primary" id="start-session">Start Session</button>
-            <button class="secondary" id="reset-session" disabled>Reset</button>
-          </div>
-
-          <p class="helper">The GUI opens on demand. Sessions stay local and in memory so the backend can remain usable without a forced browser launch.</p>
         </section>
 
         <section class="section">
@@ -1093,6 +1521,79 @@
 
         <section class="section">
           <div class="section-head">
+            <h3>Ollama Runtime</h3>
+            <button class="ghost" id="refresh-ollama" type="button">Scan</button>
+          </div>
+          <div class="auth-panel" id="ollama-panel">
+            <div class="auth-panel-head">
+              <div>
+                <h4 id="ollama-title">Checking local Ollama runtime...</h4>
+                <p class="auth-detail" id="ollama-detail">The GUI can scan the local Ollama server and list installed models.</p>
+              </div>
+              <span class="status-pill" id="ollama-status">Loading</span>
+            </div>
+            <div class="auth-meta">
+              <span class="chip"><strong>Base URL</strong>&nbsp;<span id="ollama-base-url">Waiting</span></span>
+              <span class="chip"><strong>Models</strong>&nbsp;<span id="ollama-model-count">0</span></span>
+            </div>
+            <ul class="runtime-list" id="ollama-model-list"></ul>
+            <div class="button-row">
+              <button class="ghost section-toggle" id="ollama-config-toggle" type="button" aria-expanded="false">Configure</button>
+            </div>
+            <div class="secret-panel-body" id="ollama-config-body" hidden>
+              <label>
+                Base URL
+                <input id="ollama-base-url-input" type="text" placeholder="http://127.0.0.1:11434">
+              </label>
+              <label>
+                Optional API Key
+                <input id="ollama-api-key-input" type="password" placeholder="Only if your Ollama server requires one">
+              </label>
+              <p class="auth-support" id="ollama-config-help">Save a custom URL if Ollama is running on another machine or a non-default port.</p>
+              <div class="button-row">
+                <button class="primary" id="save-ollama-config" type="button">Save Runtime</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <h3>Provider Keys</h3>
+            <span class="helper" id="provider-key-summary">Select a provider</span>
+            <button class="ghost section-toggle" id="provider-key-toggle" type="button" aria-expanded="false">Add Key</button>
+          </div>
+          <div class="secret-panel" id="provider-key-panel">
+            <p class="secret-panel-summary" id="provider-key-collapsed-summary">Add a provider key only when you need one. Existing keys and local ChatGPT auth keep working without opening this panel.</p>
+            <div class="secret-panel-body" id="provider-key-body" hidden>
+              <label>
+                Provider
+                <select id="provider-key-provider">
+                  <option value="anthropic">Anthropic</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="openai">OpenAI API key</option>
+                </select>
+              </label>
+
+              <p class="auth-detail" id="provider-key-detail">Store an API key in this project's local <code>.env</code> file.</p>
+
+              <label>
+                API Key
+                <input id="provider-key-value" type="password" placeholder="Paste API key">
+              </label>
+
+              <p class="auth-support" id="provider-key-stored">No key stored yet.</p>
+
+              <div class="button-row">
+                <button class="primary" id="save-provider-key" type="button">Save Key</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
             <h3>ChatGPT Access</h3>
             <button class="ghost" id="refresh-openai-auth" type="button">Refresh</button>
           </div>
@@ -1100,7 +1601,7 @@
             <div class="auth-panel-head">
               <div>
                 <h4 id="openai-auth-title">Checking local auth...</h4>
-                <p class="auth-detail" id="openai-auth-detail">The GUI is checking whether this machine has a reusable ChatGPT session or API-key fallback.</p>
+                <p class="auth-detail" id="openai-auth-detail">Checking whether a saved ChatGPT session or API key is available on this machine.</p>
               </div>
               <span class="status-pill" id="openai-auth-status">Loading</span>
             </div>
@@ -1125,7 +1626,7 @@
             <div class="auth-panel-head">
               <div>
                 <h4 id="update-title">Checking GitHub for updates...</h4>
-                <p class="update-summary" id="update-detail">The GUI will keep an eye on the GitHub remote and offer a fast-forward install when a safe update is available.</p>
+            <p class="update-summary" id="update-detail">Checks the GitHub remote and offers a fast-forward install when a safe update is available.</p>
               </div>
               <span class="status-pill" id="update-status">Loading</span>
             </div>
@@ -1150,18 +1651,6 @@
           <ul class="session-list" id="session-list"></ul>
           <p class="helper">Resume an in-memory session to keep working with the same provider, model, and workspace.</p>
         </section>
-
-        <section class="section">
-          <div class="section-head">
-            <h3>Prompt Shortcuts</h3>
-          </div>
-          <div class="command-list">
-            <button type="button" data-template="Inspect this repository and summarize the main architecture.">Architecture</button>
-            <button type="button" data-template="Find the OpenRouter implementation path and explain how requests flow through it.">OpenRouter flow</button>
-            <button type="button" data-template="Review the current workspace for broken tests, weak spots, and cleanup opportunities.">Review workspace</button>
-            <button type="button" data-template="Compare the direct TypeScript app path with the bundled launcher and summarize the gaps.">Compare paths</button>
-          </div>
-        </section>
       </div>
     </aside>
 
@@ -1169,13 +1658,9 @@
       <section class="panel masthead">
         <div class="masthead-copy">
           <div>
-            <p class="eyebrow">Direct App Path</p>
-            <h2>Beautiful local control for serious coding work.</h2>
+            <p class="eyebrow">Workspace</p>
+            <h2>Choose a Model and Code.</h2>
           </div>
-
-          <p>
-            The goal here is not a dashboard mosaic. It is a focused operator surface: pick the model route, keep the workspace visible, watch session health, and move from exploration to execution without losing the thread.
-          </p>
 
           <div class="metric-row">
             <div class="metric">
@@ -1193,13 +1678,57 @@
           </div>
         </div>
 
-        <div class="masthead-visual">
-          <div class="visual-copy">
-            <span class="status-pill">ChatGPT Worx</span>
-            <h3>One project, multiple model lanes.</h3>
-            <p>Use the artwork as atmosphere, not clutter: a dark branded plane on one side, clean operational UI on the other.</p>
+      </section>
+
+      <section class="panel setup-band">
+        <div class="section-head">
+          <h3>Session Setup</h3>
+          <span class="status-pill" id="setup-summary">Waiting</span>
+        </div>
+
+        <div class="setup-grid">
+          <label>
+            Provider
+            <select id="provider"></select>
+          </label>
+
+          <label>
+            Suggested Model
+            <select id="model-select"></select>
+          </label>
+
+          <label>
+            Custom Model Override
+            <input id="model" type="text" list="custom-model-options" placeholder="anthropic/claude-sonnet-4">
+          </label>
+          <datalist id="custom-model-options"></datalist>
+
+          <label>
+            Workspace
+            <input id="cwd" type="text" placeholder="/path/to/repo">
+          </label>
+
+          <div class="setup-actions">
+            <button class="primary" id="start-session">Start Session</button>
+            <button class="secondary" id="reset-session" disabled>Reset</button>
           </div>
         </div>
+
+        <div class="model-spotlight" id="model-spotlight">
+          <div class="model-spotlight-head">
+            <div>
+              <h4 id="spotlight-title">Model guidance</h4>
+              <p id="spotlight-description">Pick a provider to review the suggested model and setup details.</p>
+            </div>
+            <div style="display:grid; gap:8px; justify-items:end;">
+              <div class="spotlight-badges" id="spotlight-badges"></div>
+              <button class="ghost" id="refresh-openrouter" type="button" hidden>Refresh Free Models</button>
+            </div>
+          </div>
+          <p id="spotlight-secondary">ChatGPT uses saved local auth when available. OpenRouter highlights current free hosted options, and Ollama focuses on smaller local coding models.</p>
+        </div>
+
+        <p class="helper">Sessions stay local and in memory until you reset or restart the app.</p>
       </section>
 
       <section class="workspace-grid">
@@ -1227,7 +1756,7 @@
               <div class="empty" id="empty-state">
                 <div>
                   <h3>No active session yet.</h3>
-                  <p>Start a session on the left, then send a prompt to begin the conversation. The transcript view is optimized for working sessions, not generic dashboard noise.</p>
+                  <p>Start a session above, then send a prompt. Responses and tool activity will appear here.</p>
                 </div>
               </div>
             </section>
@@ -1241,6 +1770,18 @@
               <div class="button-row">
                 <button class="primary" id="send-message" disabled>Send Prompt</button>
                 <button class="secondary" id="clear-composer" type="button">Clear Draft</button>
+              </div>
+
+              <div class="section">
+                <div class="section-head">
+                  <h3>Prompt Shortcuts</h3>
+                </div>
+                <div class="command-list">
+                  <button type="button" data-template="Inspect this repository and summarize the main architecture.">Architecture</button>
+                  <button type="button" data-template="Find the OpenRouter implementation path and explain how requests flow through it.">OpenRouter flow</button>
+                  <button type="button" data-template="Review the current workspace for broken tests, weak spots, and cleanup opportunities.">Review workspace</button>
+                  <button type="button" data-template="Compare the direct TypeScript app path with the bundled launcher and summarize the gaps.">Compare paths</button>
+                </div>
               </div>
             </section>
           </div>
@@ -1259,7 +1800,7 @@
             <div class="section-head">
               <h3>Current Focus</h3>
             </div>
-            <p class="mini-copy" id="focus-copy">Select a provider, confirm a model, and start a session. The UI will keep the latest lane visible here while you work.</p>
+            <p class="mini-copy" id="focus-copy">Select a provider, confirm a model, and start a session.</p>
           </div>
         </aside>
       </section>
@@ -1270,6 +1811,7 @@
     const providerEl = document.getElementById("provider");
     const modelSelectEl = document.getElementById("model-select");
     const modelEl = document.getElementById("model");
+    const customModelOptionsEl = document.getElementById("custom-model-options");
     const cwdEl = document.getElementById("cwd");
     const startSessionButton = document.getElementById("start-session");
     const resetSessionButton = document.getElementById("reset-session");
@@ -1284,6 +1826,15 @@
     const setupSummaryEl = document.getElementById("setup-summary");
     const providerHealthSummaryEl = document.getElementById("provider-health-summary");
     const providerHealthEl = document.getElementById("provider-health");
+    const providerKeySummaryEl = document.getElementById("provider-key-summary");
+    const providerKeyToggleButton = document.getElementById("provider-key-toggle");
+    const providerKeyCollapsedSummaryEl = document.getElementById("provider-key-collapsed-summary");
+    const providerKeyBodyEl = document.getElementById("provider-key-body");
+    const providerKeyProviderEl = document.getElementById("provider-key-provider");
+    const providerKeyDetailEl = document.getElementById("provider-key-detail");
+    const providerKeyValueEl = document.getElementById("provider-key-value");
+    const providerKeyStoredEl = document.getElementById("provider-key-stored");
+    const saveProviderKeyButton = document.getElementById("save-provider-key");
     const sessionListEl = document.getElementById("session-list");
     const activityListEl = document.getElementById("activity-list");
     const activitySummaryEl = document.getElementById("activity-summary");
@@ -1299,6 +1850,19 @@
     const spotlightSecondaryEl = document.getElementById("spotlight-secondary");
     const spotlightBadgesEl = document.getElementById("spotlight-badges");
     const refreshOpenRouterButton = document.getElementById("refresh-openrouter");
+    const refreshOllamaButton = document.getElementById("refresh-ollama");
+    const ollamaPanelEl = document.getElementById("ollama-panel");
+    const ollamaTitleEl = document.getElementById("ollama-title");
+    const ollamaDetailEl = document.getElementById("ollama-detail");
+    const ollamaStatusEl = document.getElementById("ollama-status");
+    const ollamaBaseUrlEl = document.getElementById("ollama-base-url");
+    const ollamaModelCountEl = document.getElementById("ollama-model-count");
+    const ollamaModelListEl = document.getElementById("ollama-model-list");
+    const ollamaConfigToggleButton = document.getElementById("ollama-config-toggle");
+    const ollamaConfigBodyEl = document.getElementById("ollama-config-body");
+    const ollamaBaseUrlInputEl = document.getElementById("ollama-base-url-input");
+    const ollamaApiKeyInputEl = document.getElementById("ollama-api-key-input");
+    const saveOllamaConfigButton = document.getElementById("save-ollama-config");
     const refreshOpenAIAuthButton = document.getElementById("refresh-openai-auth");
     const openAIAuthPanelEl = document.getElementById("openai-auth-panel");
     const openAIAuthTitleEl = document.getElementById("openai-auth-title");
@@ -1328,8 +1892,13 @@
     let activity = [];
     let streamingMessageEl = null;
     let openAIAuthState = null;
+    let ollamaRuntimeState = null;
     let updateState = null;
     let isInstallingUpdate = false;
+    let providerSecretState = null;
+    let providerKeyPanelOpen = false;
+    let availableProviderSecrets = [];
+    let ollamaConfigOpen = false;
 
     const metadataHeartbeatMs = 60000;
     const updateHeartbeatMs = 300000;
@@ -1346,6 +1915,7 @@
 
       const selected = getSelectedProviderMeta();
       populateModelSelect(selected);
+      populateCustomModelOptions(selected);
       if (selected && !modelEl.dataset.touched) {
         modelEl.value = selected.defaultModel;
         modelSelectEl.value = selected.defaultModel;
@@ -1392,13 +1962,28 @@
     copyOpenAICommandButton.addEventListener("click", copyOpenAICommand);
     refreshUpdatesButton.addEventListener("click", () => refreshUpdateStatus(false, true));
     installUpdateButton.addEventListener("click", installUpdate);
+    providerKeyToggleButton.addEventListener("click", () => {
+      setProviderKeyPanelOpen(!providerKeyPanelOpen);
+    });
+    providerKeyProviderEl.addEventListener("change", () => {
+      void refreshProviderSecretState(providerKeyProviderEl.value, true);
+    });
+    saveProviderKeyButton.addEventListener("click", saveProviderKey);
+    refreshOllamaButton.addEventListener("click", () => refreshOllamaStatus(false));
+    ollamaConfigToggleButton.addEventListener("click", () => {
+      setOllamaConfigOpen(!ollamaConfigOpen);
+    });
+    saveOllamaConfigButton.addEventListener("click", saveOllamaConfig);
 
     promptEl.addEventListener("keydown", (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-        event.preventDefault();
-        if (!sendMessageButton.disabled) {
-          sendPrompt();
-        }
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (!sendMessageButton.disabled) {
+        void sendPrompt();
       }
     });
 
@@ -1419,11 +2004,13 @@
 
     async function boot() {
       await refreshMetadata(false, true);
+      await refreshProviderSecretState(providerKeyProviderEl.value, true);
+      await refreshOllamaStatus(true);
       await refreshOpenAIAuthStatus(true);
       await refreshUpdateStatus(true, false);
       await refreshSessions();
       setStatus("Ready. Start a session to begin.", false);
-      addActivity("Control room ready", `Default lane: ${getSelectedProviderMeta()?.label || "unknown"}.`, "info");
+      addActivity("App ready", `Default provider: ${getSelectedProviderMeta()?.label || "unknown"}.`, "info");
     }
 
     async function refreshMetadata(silent, initial = false) {
@@ -1438,9 +2025,16 @@
       const shouldPreserveManualModel = modelEl.dataset.touched === "true";
 
       metadata = payload;
+      syncProviderSecretOptions(payload.providers);
       providerEl.innerHTML = payload.providers
         .map((provider) => `<option value="${escapeAttribute(provider.value)}">${escapeHtml(provider.label)}</option>`)
         .join("");
+
+      const ollamaProvider = payload.providers.find((provider) => provider.value === "ollama");
+      if (ollamaProvider?.runtime) {
+        ollamaRuntimeState = ollamaProvider.runtime;
+        renderOllamaPanel();
+      }
 
       const preferred = payload.providers.find((provider) => provider.value === currentProvider)
         || payload.providers.find((provider) => provider.value === "openai" && provider.status === "configured")
@@ -1453,6 +2047,7 @@
       cwdEl.value = initial ? payload.defaultCwd : cwdEl.value;
 
       populateModelSelect(preferred);
+      populateCustomModelOptions(preferred);
 
       if (shouldPreserveManualModel && currentCustomModel) {
         modelEl.value = currentCustomModel;
@@ -1625,7 +2220,7 @@
         appendMessage("system", `Session started.\nProvider: ${session.provider}\nModel: ${session.model}\nWorkspace: ${session.cwd}`);
         updateSessionBadge("live", `${session.provider} live`);
         setStatus("Session ready. Send a prompt.", false);
-        focusCopyEl.textContent = `Active lane: ${session.provider} on ${session.model}. This workspace is now the live context for prompts and tool runs.`;
+        focusCopyEl.textContent = `Active session: ${session.provider} on ${session.model}. This workspace is now the live context for prompts and tool runs.`;
         syncSignals();
         metricTurnCountEl.textContent = String(session.turns || 0);
         addActivity("Session started", `${session.provider} · ${session.model}`, "success");
@@ -1657,7 +2252,7 @@
         resetTranscript(false);
         appendMessage("system", `Session reset.\nProvider: ${session.provider}\nModel: ${session.model}\nWorkspace: ${session.cwd}`);
         setStatus("Session reset. You can continue with a fresh conversation.", false);
-        focusCopyEl.textContent = "The active session is still open, but the working conversation has been cleared for a new pass.";
+        focusCopyEl.textContent = "The active session is still open, but the conversation has been cleared.";
         metricTurnCountEl.textContent = "0";
         addActivity("Session reset", `${session.provider} conversation cleared.`, "info");
         await refreshSessions();
@@ -1686,7 +2281,7 @@
       setBusy(true, "Running prompt...");
       updateSessionBadge("busy", `${session.provider} working`);
       addActivity("Prompt sent", summarizePrompt(prompt), "info");
-      focusCopyEl.textContent = "The agent is working through the current prompt. Keep an eye on the transcript and recent activity for the latest state.";
+      focusCopyEl.textContent = "The agent is working on the current prompt. Watch the transcript and activity feed for updates.";
       streamingMessageEl = createStreamingAssistantMessage();
 
       const startedAt = performance.now();
@@ -1752,8 +2347,8 @@
         streamingMessageEl = null;
         setStatus("Response complete.", false);
         updateSessionBadge("live", `${session.provider} live`);
-        focusCopyEl.textContent = "Latest response complete. You can continue the thread, change the prompt direction, or reset the session for a fresh pass.";
-        addActivity("Response complete", `${Math.round(performance.now() - startedAt)} ms · ${session?.turns || 0} turns in this lane`, "success");
+        focusCopyEl.textContent = "Latest response complete. You can continue the conversation or reset the session.";
+        addActivity("Response complete", `${Math.round(performance.now() - startedAt)} ms · ${session?.turns || 0} turns in this session`, "success");
         await refreshSessions();
       } catch (error) {
         if (streamingMessageEl) {
@@ -1776,10 +2371,12 @@
 
       providerHealthEl.innerHTML = metadata.providers
         .map((provider) => `
-          <li class="provider-item">
+          <li class="provider-item ${provider.value === "ollama" ? "jumpable" : ""}" ${provider.value === "ollama" ? 'data-provider-jump="ollama"' : ""}>
             <div class="provider-row">
               <strong>${escapeHtml(provider.label)}</strong>
-              <span class="status-pill status-${escapeAttribute(provider.status)}">${escapeHtml(formatProviderStatus(provider.status))}</span>
+              ${provider.status === "missing-key" && supportsProviderSecret(provider.value)
+                ? `<button class="status-pill status-${escapeAttribute(provider.status)} provider-action" type="button" data-provider-secret="${escapeAttribute(provider.value)}">${escapeHtml(formatProviderStatus(provider.status))}</button>`
+                : `<span class="status-pill status-${escapeAttribute(provider.status)}">${escapeHtml(formatProviderStatus(provider.status))}</span>`}
             </div>
             <p class="provider-model">${escapeHtml(provider.defaultModel)}</p>
             <p class="provider-detail">${escapeHtml(provider.detail)}</p>
@@ -1787,8 +2384,252 @@
         `)
         .join("");
 
+      providerHealthEl.querySelectorAll("[data-provider-secret]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const provider = button.dataset.providerSecret;
+          if (!provider) {
+            return;
+          }
+          setProviderKeyPanelOpen(true);
+          providerKeyProviderEl.value = provider;
+          void refreshProviderSecretState(provider, false);
+          providerKeyValueEl.focus();
+        });
+      });
+
+      providerHealthEl.querySelectorAll("[data-provider-jump='ollama']").forEach((item) => {
+        item.addEventListener("click", (event) => {
+          if (event.target.closest("[data-provider-secret]")) {
+            return;
+          }
+
+          ollamaPanelEl.scrollIntoView({ behavior: "smooth", block: "start" });
+          setOllamaConfigOpen(!ollamaRuntimeState?.reachable);
+          if (!ollamaRuntimeState) {
+            void refreshOllamaStatus(false);
+          }
+        });
+      });
+
       const configuredCount = metadata.providers.filter((provider) => provider.status === "configured" || provider.status === "local").length;
       providerHealthSummaryEl.textContent = `${configuredCount}/${metadata.providers.length} ready`;
+    }
+
+    function setProviderKeyPanelOpen(nextOpen) {
+      providerKeyPanelOpen = nextOpen;
+      providerKeyBodyEl.hidden = !nextOpen;
+      providerKeyCollapsedSummaryEl.hidden = nextOpen;
+      providerKeyToggleButton.textContent = nextOpen ? "Hide" : (availableProviderSecrets.length ? "Add Key" : "All Set");
+      providerKeyToggleButton.setAttribute("aria-expanded", String(nextOpen));
+      providerKeyToggleButton.disabled = !availableProviderSecrets.length && !nextOpen;
+    }
+
+    function setOllamaConfigOpen(nextOpen) {
+      ollamaConfigOpen = nextOpen;
+      ollamaConfigBodyEl.hidden = !nextOpen;
+      ollamaConfigToggleButton.textContent = nextOpen ? "Hide" : "Configure";
+      ollamaConfigToggleButton.setAttribute("aria-expanded", String(nextOpen));
+    }
+
+    function syncProviderSecretOptions(providers = []) {
+      const previousValue = providerKeyProviderEl.value;
+
+      availableProviderSecrets = providers
+        .filter((provider) => supportsProviderSecret(provider.value))
+        .filter((provider) => provider.value === "openai" ? provider.status !== "configured" : provider.status === "missing-key");
+
+      providerKeyProviderEl.innerHTML = availableProviderSecrets
+        .map((provider) => `<option value="${escapeAttribute(provider.value)}">${escapeHtml(provider.label)}</option>`)
+        .join("");
+
+      const nextValue = availableProviderSecrets.find((provider) => provider.value === previousValue)?.value
+        || availableProviderSecrets[0]?.value
+        || "";
+
+      if (nextValue) {
+        providerKeyProviderEl.value = nextValue;
+      }
+
+      setProviderKeyPanelOpen(providerKeyPanelOpen && availableProviderSecrets.length > 0);
+    }
+
+    async function refreshProviderSecretState(provider, silent = false) {
+      if (!provider) {
+        providerSecretState = null;
+        renderProviderSecretPanel();
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/provider-secrets/${encodeURIComponent(provider)}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to load provider key status.");
+        }
+
+        providerSecretState = payload.secret;
+        renderProviderSecretPanel();
+
+        if (!silent) {
+          setStatus(`${providerSecretState.label} selected.`, false);
+        }
+      } catch (error) {
+        providerSecretState = null;
+        renderProviderSecretPanel(error.message || String(error));
+        if (!silent) {
+          setStatus(error.message || String(error), true);
+        }
+      }
+    }
+
+    async function saveProviderKey() {
+      const provider = providerKeyProviderEl.value;
+      const value = providerKeyValueEl.value.trim();
+      if (!value) {
+        setStatus("API key cannot be empty.", true);
+        return;
+      }
+
+      saveProviderKeyButton.disabled = true;
+      setStatus("Saving API key...", false);
+
+      try {
+        const response = await fetch("/api/provider-secrets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, value }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to save API key.");
+        }
+
+        providerSecretState = payload.secret;
+        providerKeyValueEl.value = "";
+        renderProviderSecretPanel();
+        await refreshMetadata(true);
+        setStatus(`${providerSecretState.label} saved locally.`, false);
+        addActivity("API key saved", `${providerSecretState.label} stored in the project environment file.`, "success");
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        addActivity("API key save failed", error.message || String(error), "error");
+      } finally {
+        saveProviderKeyButton.disabled = false;
+      }
+    }
+
+    async function refreshOllamaStatus(silent = false) {
+      try {
+        const response = await fetch("/api/providers/ollama/status");
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to load Ollama runtime status.");
+        }
+
+        ollamaRuntimeState = payload.runtime;
+        renderOllamaPanel();
+
+        if (!silent) {
+          setStatus(ollamaRuntimeState.reachable ? "Ollama scan complete." : "Ollama was not reachable.", !ollamaRuntimeState.reachable);
+        }
+      } catch (error) {
+        ollamaRuntimeState = null;
+        renderOllamaPanel(error.message || String(error));
+        if (!silent) {
+          setStatus(error.message || String(error), true);
+        }
+      }
+    }
+
+    async function saveOllamaConfig() {
+      const baseUrl = ollamaBaseUrlInputEl.value.trim();
+      const apiKey = ollamaApiKeyInputEl.value;
+
+      saveOllamaConfigButton.disabled = true;
+      setStatus("Saving Ollama runtime settings...", false);
+
+      try {
+        const response = await fetch("/api/providers/ollama/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ baseUrl, apiKey }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to save Ollama runtime settings.");
+        }
+
+        ollamaRuntimeState = payload.runtime;
+        ollamaApiKeyInputEl.value = "";
+        renderOllamaPanel();
+        await refreshMetadata(true);
+        setStatus("Ollama runtime saved locally.", false);
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+      } finally {
+        saveOllamaConfigButton.disabled = false;
+      }
+    }
+
+    function renderProviderSecretPanel(errorMessage = "") {
+      if (!availableProviderSecrets.length) {
+        providerKeySummaryEl.textContent = "All set";
+        providerKeyDetailEl.textContent = "No additional provider keys are needed right now.";
+        providerKeyStoredEl.textContent = "Configured providers are already using their saved auth or stored keys.";
+        providerKeyCollapsedSummaryEl.textContent = "No additional provider keys are needed right now.";
+        saveProviderKeyButton.disabled = true;
+        return;
+      }
+
+      if (!providerSecretState) {
+        providerKeySummaryEl.textContent = errorMessage ? "Unavailable" : "Select a provider";
+        providerKeyDetailEl.textContent = errorMessage || "Store an API key in this project's local .env file.";
+        providerKeyStoredEl.textContent = errorMessage ? "Key status unavailable." : "No key status loaded yet.";
+        providerKeyCollapsedSummaryEl.textContent = errorMessage || "Add a provider key only when you need one. Existing keys and local ChatGPT auth keep working without opening this panel.";
+        saveProviderKeyButton.disabled = false;
+        return;
+      }
+
+      providerKeySummaryEl.textContent = providerSecretState.label;
+      providerKeyDetailEl.textContent = providerSecretState.detail;
+      providerKeyStoredEl.textContent = providerSecretState.hasStoredKey
+        ? `Stored value: ${providerSecretState.maskedValue}`
+        : "No key stored yet.";
+      providerKeyCollapsedSummaryEl.textContent = providerSecretState.hasStoredKey
+        ? `${providerSecretState.label} already has a saved key in this workspace.`
+        : `${providerSecretState.label} does not have a saved key yet. Open this panel only if you want to add one.`;
+      saveProviderKeyButton.disabled = false;
+    }
+
+    function renderOllamaPanel(errorMessage = "") {
+      if (!ollamaRuntimeState) {
+        ollamaTitleEl.textContent = errorMessage ? "Ollama scan unavailable" : "Checking local Ollama runtime...";
+        ollamaDetailEl.textContent = errorMessage || "The GUI can scan the local Ollama server and list installed models.";
+        ollamaStatusEl.textContent = errorMessage ? "Unavailable" : "Loading";
+        ollamaStatusEl.className = "status-pill status-missing-auth";
+        ollamaPanelEl.dataset.status = "missing-auth";
+        ollamaBaseUrlEl.textContent = "Waiting";
+        ollamaModelCountEl.textContent = "0";
+        ollamaModelListEl.innerHTML = "";
+        return;
+      }
+
+      const isOllamaReady = ollamaRuntimeState.reachable && ollamaRuntimeState.modelCount > 0;
+      ollamaTitleEl.textContent = ollamaRuntimeState.reachable
+        ? "Ollama is available."
+        : "Ollama is not reachable yet.";
+      ollamaDetailEl.textContent = ollamaRuntimeState.detail;
+      ollamaStatusEl.textContent = isOllamaReady ? "ready" : (ollamaRuntimeState.reachable ? "local" : "offline");
+      ollamaStatusEl.className = `status-pill status-${isOllamaReady ? "configured" : ollamaRuntimeState.reachable ? "local" : "missing-auth"}`;
+      ollamaPanelEl.dataset.status = isOllamaReady ? "local-ready" : (ollamaRuntimeState.reachable ? "local" : "missing-auth");
+      ollamaBaseUrlEl.textContent = ollamaRuntimeState.baseUrl;
+      ollamaModelCountEl.textContent = String(ollamaRuntimeState.modelCount);
+      ollamaBaseUrlInputEl.value = ollamaRuntimeState.baseUrl;
+
+      const previewModels = ollamaRuntimeState.installedModels.slice(0, 5);
+      ollamaModelListEl.innerHTML = previewModels.length
+        ? previewModels.map((model) => `<li>${escapeHtml(model)}</li>`).join("")
+        : `<li>${escapeHtml(ollamaRuntimeState.reachable ? "No local models installed yet." : "Scan could not find a reachable Ollama server.")}</li>`;
     }
 
     function renderOpenAIAuthPanel(errorMessage = "") {
@@ -1806,7 +2647,7 @@
       }
 
       openAIAuthTitleEl.textContent = openAIAuthState.prefersChatGPTSession
-        ? "ChatGPT is ready to act as the default lane."
+        ? "ChatGPT is ready to use."
         : openAIAuthState.status === "configured"
           ? "OpenAI access is configured."
           : openAIAuthState.status === "expired"
@@ -1887,6 +2728,39 @@
       ].join("");
     }
 
+    function populateCustomModelOptions(provider) {
+      const groups = provider?.modelGroups || [];
+      const options = [];
+
+      for (const group of groups) {
+        for (const option of group.options || []) {
+          options.push(option.value);
+        }
+      }
+
+      const unique = [...new Set(options.filter(Boolean))];
+      customModelOptionsEl.innerHTML = unique
+        .map((value) => `<option value="${escapeAttribute(value)}"></option>`)
+        .join("");
+
+      if (provider?.value === "openrouter") {
+        modelEl.placeholder = "openrouter/free or provider/model:free";
+        return;
+      }
+
+      if (provider?.value === "ollama") {
+        modelEl.placeholder = "Choose an installed Ollama model or type one";
+        return;
+      }
+
+      if (provider?.value === "openai") {
+        modelEl.placeholder = "gpt-5.2-codex";
+        return;
+      }
+
+      modelEl.placeholder = "Enter a model id";
+    }
+
     function renderModelSpotlight() {
       const provider = getSelectedProviderMeta();
       if (!provider) {
@@ -1908,7 +2782,7 @@
         badges.push({ label: "Free heartbeat", tone: "free" });
       }
       if (provider.value === "openai") {
-        badges.push({ label: "Default lane", tone: "recommended" });
+        badges.push({ label: "Default", tone: "recommended" });
         badges.push({ label: "ChatGPT auth", tone: "free" });
       }
       if (provider.value === "ollama") {
@@ -1935,7 +2809,7 @@
               <div class="session-row">
                 <strong>No sessions yet</strong>
               </div>
-              <p class="session-subline">Start a provider lane to create the first in-memory session.</p>
+              <p class="session-subline">Start a session to create the first in-memory conversation.</p>
             </button>
           </li>
         `;
@@ -1972,7 +2846,7 @@
           cwdEl.value = next.cwd;
           modelEl.dataset.touched = "true";
           updateSessionBadge("live", `${next.provider} live`);
-          setStatus("Session resumed. The server-side conversation is still live for this lane.", false);
+          setStatus("Session resumed. The server-side conversation is still live.", false);
           focusCopyEl.textContent = "A stored in-memory session is now active again. The server still has its conversation context, even though the local transcript panel only shows messages from this browser view.";
           metricTurnCountEl.textContent = String(next.turns || 0);
           syncSignals();
@@ -2087,7 +2961,7 @@
             <div class="activity-row">
               <strong>Nothing running yet</strong>
             </div>
-            <p class="activity-copy">This feed will show session starts, prompt runs, failures, and other operator-visible state changes.</p>
+            <p class="activity-copy">This feed shows session starts, prompt runs, tool activity, failures, and update checks.</p>
           </li>
         `;
         return;
@@ -2192,6 +3066,10 @@
       }
     }
 
+    function supportsProviderSecret(provider) {
+      return provider === "anthropic" || provider === "gemini" || provider === "openai" || provider === "openrouter";
+    }
+
     function buildModelOptionLabel(option) {
       return option.badge ? `${option.label} (${option.badge})` : option.label;
     }
@@ -2215,22 +3093,22 @@
           ? `Last live refresh ${relativeTime(heartbeat.refreshedAt)}.`
           : "Waiting for the first live refresh.";
         if (modelValue === "openrouter/free" || String(modelValue || "").endsWith(":free")) {
-          return `${heartbeatLine} This choice keeps hosted usage on the currently free OpenRouter lane and prefers the strongest available free option.`;
+          return `${heartbeatLine} This choice routes requests to the current free OpenRouter option and prefers the strongest available free model.`;
         }
-        return `${heartbeatLine} OpenRouter options mix premium hosted models with currently free lanes, and the picker ranks larger free coding-capable models like MiniMax, Nemotron, Qwen, or GPT-OSS higher when they are available.`;
+        return `${heartbeatLine} OpenRouter options include premium hosted models and current free options. The picker ranks larger coding-capable free models higher when they are available.`;
       }
 
       if (provider === "openai") {
         const selectedProvider = getSelectedProviderMeta();
         const auth = selectedProvider?.auth;
         if (auth?.authType === "oauth") {
-          return "This lane is using the saved ChatGPT/Codex session token on this machine, so it can act as the default overall provider without requiring an API key.";
+          return "This provider is using the saved ChatGPT/Codex session token on this machine, so it can run without a separate API key.";
         }
-        return "This lane uses OpenAI directly. If a saved ChatGPT session is unavailable, the app falls back to OPENAI_API_KEY.";
+        return "This provider uses OpenAI directly. If a saved ChatGPT session is unavailable, the app falls back to OPENAI_API_KEY.";
       }
 
       if (provider === "ollama") {
-        return "Ollama is intentionally biased toward smaller local coding models here so end users can get useful code help without workstation-class hardware.";
+        return "Ollama focuses on smaller local coding models so it stays practical on local hardware.";
       }
 
       return "You can pick a suggested model or override it manually if you already know the exact id you want.";

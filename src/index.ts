@@ -1,4 +1,6 @@
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 import pc from "picocolors";
 
@@ -7,11 +9,14 @@ import { startRepl } from "./cli.js";
 import { loadConfig } from "./config.js";
 import { toolDefinitions } from "./tools.js";
 
+const execFileAsync = promisify(execFile);
+
 type ParsedArgs = {
   cwd: string;
   provider?: "anthropic" | "gemini" | "openai" | "openrouter" | "ollama";
   model?: string;
   prompt?: string;
+  interactive: boolean;
   showHelp: boolean;
   showTools: boolean;
 };
@@ -21,7 +26,7 @@ function printHelp(): void {
   process.stdout.write(`Usage:\n`);
   process.stdout.write(`  npm run dev\n`);
   process.stdout.write(`  npm run dev -- "summarize this project"\n`);
-  process.stdout.write(`  npm run dev -- --provider openai --model gpt-5-mini "review this repo"\n`);
+  process.stdout.write(`  npm run dev -- --provider openai --model gpt-5.2-codex "review this repo"\n`);
   process.stdout.write(`  npm run dev -- --provider openrouter --model anthropic/claude-sonnet-4 "review this repo"\n`);
   process.stdout.write(`  npm run dev -- --provider ollama --model qwen3 --cwd E:\\\\repo "inspect this project"\n\n`);
   process.stdout.write(`Flags:\n`);
@@ -30,6 +35,7 @@ function printHelp(): void {
   process.stdout.write(`  --cwd    Set the workspace root\n`);
   process.stdout.write(`  --provider  Choose anthropic, gemini, openai, openrouter, or ollama\n`);
   process.stdout.write(`  --model  Override the model for the chosen provider\n`);
+  process.stdout.write(`  --interactive  Force the TUI even when extra args are present\n`);
 }
 
 function printTools(): void {
@@ -44,6 +50,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   let provider: "anthropic" | "gemini" | "openai" | "openrouter" | "ollama" | undefined;
   let model: string | undefined;
   const promptParts: string[] = [];
+  let interactive = false;
   let showHelp = false;
   let showTools = false;
 
@@ -58,6 +65,10 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (arg === "--tools") {
       showTools = true;
+      continue;
+    }
+    if (arg === "--interactive") {
+      interactive = true;
       continue;
     }
     if (arg === "--cwd") {
@@ -81,7 +92,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     promptParts.push(arg);
   }
 
-  const parsed: ParsedArgs = { cwd, showHelp, showTools };
+  const parsed: ParsedArgs = { cwd, interactive, showHelp, showTools };
   if (provider !== undefined) {
     parsed.provider = provider;
   }
@@ -95,7 +106,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 async function main(): Promise<void> {
-  const { cwd, provider, model, prompt, showHelp, showTools } = parseArgs(process.argv.slice(2));
+  const { cwd, provider, model, prompt, interactive, showHelp, showTools } = parseArgs(process.argv.slice(2));
   if (showHelp) {
     printHelp();
     return;
@@ -125,7 +136,9 @@ async function main(): Promise<void> {
         },
   );
 
-  if (prompt) {
+  await ensureGuiRuntime();
+
+  if (prompt && !interactive) {
     const result = await agent.runTurn(prompt);
     process.stdout.write(`${result.text}\n`);
     return;
@@ -135,7 +148,23 @@ async function main(): Promise<void> {
     provider: config.provider,
     model: config.model,
     cwd,
+    guiUrl: process.env.CLAW_GUI_URL || `http://127.0.0.1:${process.env.CLAW_GUI_PORT || "4310"}`,
   });
+}
+
+async function ensureGuiRuntime(): Promise<void> {
+  const repoRoot = path.resolve(import.meta.dirname, "..");
+  const ensureScript = path.join(repoRoot, "scripts", "ensure-gui.mjs");
+
+  try {
+    await execFileAsync(process.execPath, [ensureScript], {
+      cwd: repoRoot,
+      env: process.env,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`${pc.yellow(`Warning: GUI runtime was not confirmed (${message}). Continuing with TUI.\n`)}`);
+  }
 }
 
 main().catch((error) => {

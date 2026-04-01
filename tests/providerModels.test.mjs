@@ -14,11 +14,9 @@ test("providerLabel returns human readable provider names", () => {
   assert.equal(providerLabel("openrouter"), "OpenRouter");
 });
 
-test("providerModelCatalog includes active model and defaults", () => {
-  const catalog = providerModelCatalog("openai", { OPENAI_MODEL: "gpt-5.2" });
-  assert.equal(catalog[0], "gpt-5.2");
-  assert.ok(catalog.includes("gpt-4.1"));
-  assert.ok(catalog.includes("o4-mini"));
+test("providerModelCatalog keeps the ChatGPT lane focused on Codex", () => {
+  const catalog = providerModelCatalog("openai", { OPENAI_MODEL: "gpt-5.2-codex" });
+  assert.deepEqual(catalog, ["gpt-5.2-codex"]);
 });
 
 test("providerModelCatalog merges custom environment models", () => {
@@ -35,9 +33,15 @@ test("providerPromptSuggestions mirrors the provider catalog", () => {
   assert.deepEqual(suggestions, providerModelCatalog("zai", { ZAI_MODEL: "glm-5" }));
 });
 
-test("providerAdditionalModelOptions are picker-friendly", () => {
-  const options = providerAdditionalModelOptions("openai", { OPENAI_MODEL: "gpt-5.2" });
-  assert.ok(options.some((option) => option.value === "gpt-5.2" && option.description === "OpenAI model"));
+test("providerAdditionalModelOptions expose only ChatGPT Codex for the OpenAI lane", () => {
+  const options = providerAdditionalModelOptions("openai", { OPENAI_MODEL: "gpt-5.2-codex" });
+  assert.deepEqual(options, [
+    {
+      value: "gpt-5.2-codex",
+      label: "gpt-5.2-codex",
+      description: "OpenAI model",
+    },
+  ]);
 });
 
 test("openrouter catalog includes provider-qualified model ids", () => {

@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import { CodingAgent } from "./agent.js";
 import { loadConfig } from "./config.js";
 import { getOpenAIAuthPanelState } from "./guiAuth.js";
+import { getOllamaRuntimeState, saveOllamaRuntimeConfig } from "./guiOllama.js";
+import { getProviderSecretState, saveProviderSecret, type KeyBackedProvider } from "./guiSecrets.js";
 import { getUpdateCheckState, installAvailableUpdate } from "./guiUpdate.js";
 import { getGuiModelGroups, getOpenRouterCatalogState, startOpenRouterHeartbeat } from "./modelCatalog.js";
 import type { ProviderName } from "./providers.js";
@@ -33,6 +35,16 @@ type SessionCreateRequest = {
 
 type SessionMessageRequest = {
   prompt?: string;
+};
+
+type ProviderSecretRequest = {
+  provider?: KeyBackedProvider;
+  value?: string;
+};
+
+type OllamaConfigRequest = {
+  baseUrl?: string;
+  apiKey?: string;
 };
 
 type SessionSummary = {
@@ -60,12 +72,13 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/api/meta") {
       const openAiAuth = getOpenAIAuthPanelState({ env: process.env });
-      const [anthropicModels, geminiModels, openAiModels, openRouterState, ollamaModels] = await Promise.all([
+      const [anthropicModels, geminiModels, openAiModels, openRouterState, ollamaModels, ollamaRuntime] = await Promise.all([
         getGuiModelGroups("anthropic"),
         getGuiModelGroups("gemini"),
         getGuiModelGroups("openai"),
         getOpenRouterCatalogState(),
         getGuiModelGroups("ollama"),
+        getOllamaRuntimeState(process.env),
       ]);
 
       return sendJson(res, 200, {
@@ -91,7 +104,7 @@ const server = createServer(async (req, res) => {
           {
             value: "openai",
             label: "ChatGPT",
-            defaultModel: process.env.OPENAI_MODEL || "gpt-5-mini",
+            defaultModel: process.env.OPENAI_MODEL || "gpt-5.2-codex",
             status: openAiAuth.status,
             detail: openAiAuth.shortDetail,
             modelGroups: openAiModels,
@@ -118,10 +131,26 @@ const server = createServer(async (req, res) => {
             label: "Ollama",
             defaultModel: process.env.OLLAMA_MODEL || "qwen3",
             status: "local",
-            detail: process.env.OLLAMA_BASE_URL || "Uses local Ollama runtime",
+            detail: ollamaRuntime.detail,
             modelGroups: ollamaModels,
+            runtime: ollamaRuntime,
           },
         ],
+      });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/providers/ollama/status") {
+      return sendJson(res, 200, {
+        ok: true,
+        runtime: await getOllamaRuntimeState(process.env),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/providers/ollama/config") {
+      const body = (await readJson(req)) as OllamaConfigRequest;
+      return sendJson(res, 200, {
+        ok: true,
+        runtime: await saveOllamaRuntimeConfig(repoRoot, body, process.env),
       });
     }
 
@@ -129,6 +158,29 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, {
         ok: true,
         auth: getOpenAIAuthPanelState({ env: process.env }),
+      });
+    }
+
+    if (req.method === "GET" && url.pathname.startsWith("/api/provider-secrets/")) {
+      const provider = decodeProviderFromPath(url.pathname);
+      return sendJson(res, 200, {
+        ok: true,
+        secret: getProviderSecretState(provider, process.env),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/provider-secrets") {
+      const body = (await readJson(req)) as ProviderSecretRequest;
+      if (!body.provider) {
+        throw httpError(400, "Provider is required.");
+      }
+      if (typeof body.value !== "string") {
+        throw httpError(400, "API key value is required.");
+      }
+
+      return sendJson(res, 200, {
+        ok: true,
+        secret: await saveProviderSecret(repoRoot, body.provider, body.value, process.env),
       });
     }
 
@@ -348,6 +400,14 @@ function relativeHeartbeatTime(iso: string): string {
     return `${deltaHours}h ago`;
   }
   return `${Math.round(deltaHours / 24)}d ago`;
+}
+
+function decodeProviderFromPath(pathname: string): KeyBackedProvider {
+  const provider = pathname.split("/").at(-1)?.trim();
+  if (provider !== "anthropic" && provider !== "gemini" && provider !== "openai" && provider !== "openrouter") {
+    throw httpError(404, "Provider secret route not found.");
+  }
+  return provider;
 }
 
 async function streamTurn(res: ServerResponse, session: SessionRecord, prompt: string): Promise<void> {

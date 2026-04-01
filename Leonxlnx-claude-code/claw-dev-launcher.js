@@ -4,12 +4,13 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const readline = require("node:readline/promises");
 const { pathToFileURL } = require("node:url");
 
 const repoRoot = __dirname;
 const workspaceRoot = path.dirname(repoRoot);
+const ensureGuiScriptPath = path.join(workspaceRoot, "scripts", "ensure-gui.mjs");
 
 // Load .env from the workspace root so all env vars are available to the launcher
 require("dotenv").config({ path: path.join(workspaceRoot, ".env") });
@@ -57,6 +58,8 @@ async function main() {
     return launchBundledClient({ ...process.env }, forwardArgs);
   }
 
+  ensureGuiRuntime();
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -83,6 +86,22 @@ async function main() {
     return launchBundledClient(env, forwardArgs);
   } finally {
     rl.close();
+  }
+}
+
+function ensureGuiRuntime() {
+  if (!fs.existsSync(ensureGuiScriptPath)) {
+    return;
+  }
+
+  const result = spawnSync(process.execPath, [ensureGuiScriptPath], {
+    cwd: workspaceRoot,
+    env: process.env,
+    stdio: "ignore",
+  });
+
+  if (result.status !== 0) {
+    process.stdout.write("Warning: Claw Dev could not confirm the GUI runtime. Continuing with terminal mode.\n");
   }
 }
 
@@ -118,13 +137,19 @@ function applyBrandingPatch() {
 }
 
 async function resolveProvider(rl, providerArg, forwardArgs) {
-  const preset = normalizeProviderName((providerArg ?? process.env.CLAW_PROVIDER ?? "").trim().toLowerCase());
+  const preset = normalizeProviderName((providerArg ?? process.env.CLAW_PROVIDER ?? process.env.LLM_PROVIDER ?? "").trim().toLowerCase());
   if (["anthropic", "openai", "gemini", "groq", "openrouter", "copilot", "zai", "ollama"].includes(preset)) {
     return preset;
   }
 
   if (isInfoOnlyInvocation(forwardArgs)) {
     return "anthropic";
+  }
+
+  const preferredProvider = await resolvePreferredProviderForLauncher(process.env);
+  if (preferredProvider) {
+    process.stdout.write(`\nUsing configured ${providerDisplayName(preferredProvider)} session startup.\n`);
+    return preferredProvider;
   }
 
   process.stdout.write("\nClaw Dev provider setup\n");
@@ -145,25 +170,7 @@ async function resolveProvider(rl, providerArg, forwardArgs) {
 }
 
 function normalizeProviderName(raw) {
-  if (raw === "claude") {
-    return "anthropic";
-  }
-  if (raw === "grok") {
-    return "groq";
-  }
-  if (raw === "github" || raw === "github-models") {
-    return "copilot";
-  }
-  if (raw === "router") {
-    return "openrouter";
-  }
-  if (raw === "z.ai") {
-    return "zai";
-  }
-  if (raw === "chatgpt") {
-    return "openai";
-  }
-  return raw;
+  return normalizeProviderNameFallback(raw);
 }
 
 function isInfoOnlyInvocation(forwardArgs) {
@@ -303,8 +310,8 @@ async function configureCompatProvider(provider, env, rl, modelArg) {
     case "openai": {
       printProviderStartSummary(provider, [
         "Launching OpenAI through the local Anthropic-compatible proxy.",
-        "You can keep the default model or paste any current OpenAI model id.",
-        "Recommended starting points: gpt-5-mini, gpt-5.2, or gpt-5.2-codex for heavier coding work.",
+        "This path prefers the local ChatGPT login when it is available on this machine.",
+        "ChatGPT mode is pinned to Codex for coding work in this app.",
       ]);
       const auth = await resolveOpenAIAuthForLauncher(env);
       if (auth.status === "ok" && auth.authType === "oauth") {
@@ -331,7 +338,7 @@ async function configureCompatProvider(provider, env, rl, modelArg) {
         provider,
         modelArg,
         envKey: "OPENAI_MODEL",
-        defaultModel: "gpt-5-mini",
+        defaultModel: "gpt-5.2-codex",
       });
       ensureProviderModelSlots(provider, env);
       await applyCompatModelEnvForLauncher(provider, env);
@@ -413,7 +420,7 @@ async function configureCompatProvider(provider, env, rl, modelArg) {
         provider,
         modelArg,
         envKey: "OPENROUTER_MODEL",
-        defaultModel: "anthropic/claude-sonnet-4",
+        defaultModel: "openrouter/free",
       });
       ensureProviderModelSlots(provider, env);
       await applyCompatModelEnvForLauncher(provider, env);
@@ -433,7 +440,7 @@ async function configureCompatProvider(provider, env, rl, modelArg) {
         provider,
         modelArg,
         envKey: "OLLAMA_MODEL",
-        defaultModel: "qwen3",
+        defaultModel: "qwen2.5-coder:7b",
       });
       env.OLLAMA_KEEP_ALIVE = env.OLLAMA_KEEP_ALIVE?.trim() || "30m";
       ensureProviderModelSlots(provider, env);
@@ -510,6 +517,34 @@ async function resolveOpenAIAuthForLauncher(env) {
   };
 }
 
+async function resolvePreferredProviderForLauncher(env) {
+  const helperUrl = pathToFileURL(path.join(workspaceRoot, "shared", "tuiDefaults.js")).href;
+  const { resolveConfiguredProvider } = await import(helperUrl);
+  return resolveConfiguredProvider(env);
+}
+
+function normalizeProviderNameFallback(raw) {
+  if (raw === "claude") {
+    return "anthropic";
+  }
+  if (raw === "grok") {
+    return "groq";
+  }
+  if (raw === "github" || raw === "github-models") {
+    return "copilot";
+  }
+  if (raw === "router") {
+    return "openrouter";
+  }
+  if (raw === "z.ai") {
+    return "zai";
+  }
+  if (raw === "chatgpt") {
+    return "openai";
+  }
+  return raw;
+}
+
 async function applyCompatModelEnvForLauncher(provider, env) {
   const helperUrl = pathToFileURL(path.join(workspaceRoot, "shared", "compatEnv.js")).href;
   const { applyCompatModelEnv } = await import(helperUrl);
@@ -522,6 +557,12 @@ async function resolveModelSelection({ rl, env, provider, modelArg, envKey, defa
   if (override) {
     env[envKey] = override;
     return override;
+  }
+
+  const shouldPrompt = await shouldPromptForModelSelectionForLauncher(env, { modelArg });
+  if (!shouldPrompt) {
+    env[envKey] = existing;
+    return existing;
   }
 
   const suggestedModels = suggestions?.length ? suggestions : await getProviderPromptSuggestions(provider, env);
@@ -548,6 +589,12 @@ async function resolveModelSelection({ rl, env, provider, modelArg, envKey, defa
 
   env[envKey] = answer || existing;
   return env[envKey];
+}
+
+async function shouldPromptForModelSelectionForLauncher(env, options) {
+  const helperUrl = pathToFileURL(path.join(workspaceRoot, "shared", "tuiDefaults.js")).href;
+  const { shouldPromptForModelSelection } = await import(helperUrl);
+  return shouldPromptForModelSelection(env, options);
 }
 
 async function primeBundledModelPicker(provider, env) {

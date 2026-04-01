@@ -115,3 +115,39 @@ test("getGuiModelGroups returns small coding-focused Ollama recommendations", as
   assert.ok(smallLocal);
   assert.ok(smallLocal.options.some((option) => option.value === "codegemma:2b"));
 });
+
+test("getGuiModelGroups includes locally installed Ollama models when the runtime is available", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("/api/tags")) {
+      return new Response(
+        JSON.stringify({
+          models: [
+            { name: "qwen3:14b" },
+            { name: "gpt-oss:20b" },
+            { name: "nomic-embed-text:latest" },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    throw new Error(`unexpected fetch: ${url}`);
+  };
+
+  try {
+    const groups = await getGuiModelGroups("ollama");
+    const installed = groups.find((group) => group.id === "installed");
+
+    assert.ok(installed);
+    assert.equal(installed.options[0].value, "gpt-oss:20b");
+    assert.ok(installed.options.some((option) => option.value === "qwen3:14b"));
+    assert.ok(installed.options.some((option) => option.value === "nomic-embed-text:latest"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

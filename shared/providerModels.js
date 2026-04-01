@@ -19,7 +19,7 @@ const PROVIDER_LABELS = {
 };
 
 const DEFAULT_MODEL_CATALOG = {
-  openai: ["gpt-5-mini", "gpt-5.2", "gpt-5-nano", "gpt-5.2-codex", "gpt-4.1", "o3-mini", "o4-mini"],
+  openai: ["gpt-5.2-codex"],
   gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemma-3-27b-it"],
   groq: ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3-32b", "llama-3.3-70b-versatile"],
   openrouter: [

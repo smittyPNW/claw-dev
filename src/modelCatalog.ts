@@ -38,6 +38,15 @@ type OpenRouterModelResponse = {
   }>;
 };
 
+type OllamaTagsResponse = {
+  models?: Array<{
+    name?: string;
+    model?: string;
+    modified_at?: string;
+    size?: number;
+  }>;
+};
+
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 const OPENROUTER_HEARTBEAT_MS = Number(process.env.CLAW_OPENROUTER_HEARTBEAT_MS || "300000");
 const OPENROUTER_CACHE_TTL_MS = OPENROUTER_HEARTBEAT_MS;
@@ -108,36 +117,21 @@ export async function getGuiModelGroups(
     return [
       {
         id: "chatgpt",
-        label: "ChatGPT and OpenAI Models",
+        label: "ChatGPT Codex",
         options: uniqueOptions([
           {
-            value: env.OPENAI_MODEL?.trim() || "gpt-5-mini",
-            label: env.OPENAI_MODEL?.trim() || "gpt-5-mini",
-            description: "Configured default for ChatGPT or OpenAI in the direct app path.",
+            value: env.OPENAI_MODEL?.trim() || "gpt-5.2-codex",
+            label: env.OPENAI_MODEL?.trim() || "gpt-5.2-codex",
+            description: "Configured Codex model for the ChatGPT lane in the direct app path.",
             badge: "Default",
             emphasis: "recommended",
           },
           {
-            value: "gpt-5-mini",
-            label: "GPT-5 Mini",
-            description: "Fast default for coding and repo exploration.",
-            badge: "Recommended",
-            emphasis: "recommended",
-          },
-          {
-            value: "gpt-5.2",
-            label: "GPT-5.2",
-            description: "Stronger general reasoning for heavier coding work.",
-          },
-          {
             value: "gpt-5.2-codex",
             label: "GPT-5.2 Codex",
-            description: "Coding-focused OpenAI model when you want a heavier tool-using lane.",
-          },
-          {
-            value: "o4-mini",
-            label: "o4-mini",
-            description: "Smaller reasoning-heavy option for iterative work.",
+            description: "Primary ChatGPT coding model for this app.",
+            badge: "Best Codex",
+            emphasis: "recommended",
           },
         ]),
       },
@@ -149,7 +143,7 @@ export async function getGuiModelGroups(
   }
 
   if (provider === "ollama") {
-    return getOllamaModelGroups();
+    return getOllamaModelGroups(env);
   }
 
   return [];
@@ -340,9 +334,20 @@ function buildOpenRouterFallbackState(env: NodeJS.ProcessEnv, now: number): Open
   };
 }
 
-function getOllamaModelGroups(): GuiModelGroup[] {
-  return [
-    {
+async function getOllamaModelGroups(env: NodeJS.ProcessEnv): Promise<GuiModelGroup[]> {
+  const installed = await getInstalledOllamaModelOptions(env);
+
+  const groups: GuiModelGroup[] = [];
+
+  if (installed.length > 0) {
+    groups.push({
+      id: "installed",
+      label: "Installed On This Machine",
+      options: installed,
+    });
+  }
+
+  groups.push({
       id: "recommended",
       label: "Recommended Coding Models",
       options: [
@@ -368,8 +373,8 @@ function getOllamaModelGroups(): GuiModelGroup[] {
           emphasis: "local",
         },
       ],
-    },
-    {
+    });
+  groups.push({
       id: "small-local",
       label: "Small Local Specialists",
       options: [
@@ -388,8 +393,8 @@ function getOllamaModelGroups(): GuiModelGroup[] {
           emphasis: "local",
         },
       ],
-    },
-    {
+    });
+  groups.push({
       id: "other",
       label: "Other Local Options",
       options: [
@@ -406,8 +411,49 @@ function getOllamaModelGroups(): GuiModelGroup[] {
           emphasis: "default",
         },
       ],
-    },
-  ];
+    });
+
+  return groups.filter((group) => group.options.length > 0);
+}
+
+async function getInstalledOllamaModelOptions(env: NodeJS.ProcessEnv): Promise<GuiModelOption[]> {
+  const baseUrl = (env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434").replace(/\/$/, "");
+
+  try {
+    const response = await fetch(`${baseUrl}/api/tags`);
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = (await response.json()) as OllamaTagsResponse;
+    const options: GuiModelOption[] = [];
+
+    for (const model of payload.models ?? []) {
+      const value = model.name?.trim() || model.model?.trim() || "";
+      if (!value) {
+        continue;
+      }
+
+      const option: GuiModelOption = {
+        value,
+        label: formatInstalledOllamaLabel(value),
+        description: describeInstalledOllamaModel(value),
+      };
+
+      const badge = pickInstalledOllamaBadge(value);
+      if (badge) {
+        option.badge = badge;
+      }
+
+      option.emphasis = pickInstalledOllamaEmphasis(value);
+
+      options.push(option);
+    }
+
+    return uniqueOptions(options.sort(compareInstalledOllamaOptions));
+  } catch {
+    return [];
+  }
 }
 
 function isOpenRouterFreeModel(model: NonNullable<OpenRouterModelResponse["data"]>[number]): boolean {
@@ -514,6 +560,90 @@ function scoreOpenRouterModel(model: NonNullable<OpenRouterModelResponse["data"]
       score += signal.bonus;
       break;
     }
+  }
+
+  return score;
+}
+
+function formatInstalledOllamaLabel(value: string): string {
+  const [baseName = "", tag] = value.split(":");
+
+  return baseName
+    .split(/[-_]/g)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
+    .concat(tag ? ` ${tag.toUpperCase()}` : "");
+}
+
+function describeInstalledOllamaModel(value: string): string {
+  const text = value.toLowerCase();
+
+  if (text.includes("oss")) {
+    return "Installed local open-weight reasoning model.";
+  }
+  if (text.includes("coder") || text.includes("code")) {
+    return "Installed local coding model.";
+  }
+  if (text.includes("qwen3")) {
+    return "Installed Qwen3 local model for coding and general assistant work.";
+  }
+  if (text.includes("ministral")) {
+    return "Installed lightweight local model for fast responses.";
+  }
+
+  return "Installed local Ollama model.";
+}
+
+function pickInstalledOllamaBadge(value: string): string | undefined {
+  const text = value.toLowerCase();
+
+  if (text.includes("coder") || text.includes("oss")) {
+    return "Installed";
+  }
+  if (text.includes("qwen3")) {
+    return "Local";
+  }
+
+  return undefined;
+}
+
+function pickInstalledOllamaEmphasis(value: string): NonNullable<GuiModelOption["emphasis"]> {
+  const text = value.toLowerCase();
+  if (text.includes("coder") || text.includes("oss")) {
+    return "recommended";
+  }
+  return "local";
+}
+
+function compareInstalledOllamaOptions(left: GuiModelOption, right: GuiModelOption): number {
+  return scoreInstalledOllamaOption(right.value) - scoreInstalledOllamaOption(left.value)
+    || left.label.localeCompare(right.label);
+}
+
+function scoreInstalledOllamaOption(value: string): number {
+  const text = value.toLowerCase();
+  let score = 0;
+
+  if (text.includes("coder")) {
+    score += 80;
+  }
+  if (text.includes("oss")) {
+    score += 72;
+  }
+  if (text.includes("qwen3")) {
+    score += 54;
+  }
+  if (text.includes("ministral")) {
+    score += 28;
+  }
+  if (text.includes("embed")) {
+    score -= 100;
+  }
+  if (text.includes("14b")) {
+    score += 12;
+  }
+  if (text.includes("8b")) {
+    score += 8;
   }
 
   return score;

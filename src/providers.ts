@@ -755,7 +755,7 @@ export class OpenAIProvider implements LlmProvider {
         tools: compactRequest.tools,
         tool_choice: compactRequest.tools.length > 0 ? "auto" : "none",
         parallel_tool_calls: true,
-        reasoning: { effort: "none" },
+        reasoning: { effort: resolveOpenAIReasoningEffort(this.model) },
         store: false,
         stream: true,
         include: [],
@@ -855,6 +855,20 @@ export class OpenAIProvider implements LlmProvider {
       toolCalls,
     };
   }
+}
+
+function resolveOpenAIReasoningEffort(model: string): "low" | "medium" | "high" | "xhigh" {
+  const normalized = model.trim().toLowerCase();
+
+  if (normalized.includes("codex")) {
+    return "medium";
+  }
+
+  if (normalized.startsWith("gpt-5") || normalized.startsWith("o3") || normalized.startsWith("o4")) {
+    return "medium";
+  }
+
+  return "low";
 }
 
 export class OpenRouterProvider extends OpenAICompatibleProvider {

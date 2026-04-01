@@ -85,7 +85,7 @@ test("OpenAIProvider can use saved ChatGPT auth and call the responses endpoint"
 
   try {
     const provider = new OpenAIProvider({
-      model: "gpt-5-mini",
+      model: "gpt-5.2-codex",
       cwd: process.cwd(),
     });
 
@@ -93,6 +93,8 @@ test("OpenAIProvider can use saved ChatGPT auth and call the responses endpoint"
     assert.equal(result.text, "hello from chatgpt session");
     assert.equal(calls[0].url, "https://chatgpt.com/backend-api/codex/responses");
     assert.match(calls[0].init.headers.Authorization, /^Bearer /);
+    const requestBody = JSON.parse(calls[0].init.body);
+    assert.equal(requestBody.reasoning.effort, "medium");
   } finally {
     globalThis.fetch = originalFetch;
     process.env = originalEnv;

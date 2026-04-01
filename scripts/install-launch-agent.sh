@@ -85,7 +85,14 @@ cat > "${PLIST_PATH}" <<EOF
 EOF
 
 launchctl bootout "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 || true
-launchctl bootstrap "gui/$(id -u)" "${PLIST_PATH}"
-launchctl kickstart -k "gui/$(id -u)/${LABEL}"
+
+if ! launchctl bootstrap "gui/$(id -u)" "${PLIST_PATH}" >/dev/null 2>&1; then
+  if ! launchctl print "gui/$(id -u)/${LABEL}" >/dev/null 2>&1; then
+    echo "Could not bootstrap ${LABEL}." >&2
+    exit 1
+  fi
+fi
+
+launchctl kickstart -k "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 || true
 
 echo "Installed and started ${LABEL}"

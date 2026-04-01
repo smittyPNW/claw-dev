@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   formatTelegramStatus,
+  parseAllowedChatIds,
   parseTelegramInput,
   splitTelegramMessage,
 } from "../dist/telegramShared.js";
@@ -29,6 +30,12 @@ test("splitTelegramMessage chunks long content safely", () => {
   const chunks = splitTelegramMessage(`${"a".repeat(3000)}\n\n${"b".repeat(2200)}`, 4096);
   assert.equal(chunks.length, 2);
   assert.ok(chunks.every((chunk) => chunk.length <= 4096));
+});
+
+test("parseAllowedChatIds ignores blank values and keeps real chat ids", () => {
+  assert.deepEqual([...parseAllowedChatIds("")], []);
+  assert.deepEqual([...parseAllowedChatIds(" ,  , ")], []);
+  assert.deepEqual([...parseAllowedChatIds("12345, -100987654321, 77")], [12345, -100987654321, 77]);
 });
 
 test("formatTelegramStatus summarizes the active session", () => {

@@ -6,6 +6,7 @@ import type { ProviderName, TurnEvent } from "./providers.js";
 import {
   formatTelegramHelp,
   formatTelegramStatus,
+  parseAllowedChatIds,
   parseTelegramInput,
   splitTelegramMessage,
   type TelegramSessionSnapshot,
@@ -278,15 +279,6 @@ function isAllowedChat(chatId: number): boolean {
     return true;
   }
   return ALLOWED_CHAT_IDS.has(chatId);
-}
-
-function parseAllowedChatIds(raw?: string): Set<number> {
-  return new Set(
-    String(raw ?? "")
-      .split(",")
-      .map((value) => Number(value.trim()))
-      .filter((value) => Number.isInteger(value)),
-  );
 }
 
 function normalizeProvider(value?: string): ProviderName | undefined {

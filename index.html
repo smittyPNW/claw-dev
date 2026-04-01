@@ -481,6 +481,24 @@
       box-shadow: inset 0 0 0 1px rgba(111, 214, 165, 0.06);
     }
 
+    .auth-panel[data-status="configured"] {
+      border-color: rgba(111, 214, 165, 0.34);
+      background:
+        linear-gradient(180deg, rgba(95, 201, 149, 0.12), rgba(255, 255, 255, 0.03)),
+        radial-gradient(circle at top right, rgba(111, 214, 165, 0.18), transparent 46%);
+      box-shadow: inset 0 0 0 1px rgba(111, 214, 165, 0.06);
+    }
+
+    .auth-panel[data-status="missing-auth"],
+    .auth-panel[data-status="error"],
+    .auth-panel[data-status="expired"] {
+      border-color: rgba(255, 141, 115, 0.3);
+      background:
+        linear-gradient(180deg, rgba(255, 141, 115, 0.09), rgba(255, 255, 255, 0.03)),
+        radial-gradient(circle at top right, rgba(255, 141, 115, 0.14), transparent 44%);
+      box-shadow: inset 0 0 0 1px rgba(255, 141, 115, 0.05);
+    }
+
     .secret-panel {
       padding: 14px;
       display: grid;
@@ -1623,6 +1641,69 @@
 
         <section class="section">
           <div class="section-head">
+            <h3>Telegram Bot</h3>
+            <button class="ghost" id="refresh-telegram" type="button">Refresh</button>
+          </div>
+          <div class="auth-panel" id="telegram-panel">
+            <div class="auth-panel-head">
+              <div>
+                <h4 id="telegram-title">Checking Telegram setup...</h4>
+                <p class="auth-detail" id="telegram-detail">Paste a Telegram bot token here so this workspace can answer through your bot.</p>
+              </div>
+              <span class="status-pill" id="telegram-status">Loading</span>
+            </div>
+            <div class="auth-meta">
+              <span class="chip"><strong>Bot</strong>&nbsp;<span id="telegram-bot-name">Waiting</span></span>
+              <span class="chip"><strong>Provider</strong>&nbsp;<span id="telegram-provider">Waiting</span></span>
+            </div>
+            <p class="auth-support" id="telegram-next-action">Waiting for the first Telegram setup check.</p>
+            <p class="auth-command" id="telegram-command">npm run telegram</p>
+            <div class="button-row">
+              <button class="primary" id="telegram-start" type="button">Start Bot</button>
+              <button class="ghost" id="telegram-stop" type="button">Stop Bot</button>
+              <button class="ghost section-toggle" id="telegram-config-toggle" type="button" aria-expanded="false">Configure</button>
+            </div>
+            <div class="secret-panel-body" id="telegram-config-body" hidden>
+              <label>
+                Telegram Bot Token
+                <input id="telegram-token-input" type="password" placeholder="Paste token from BotFather or leave blank to keep the stored token">
+              </label>
+              <div class="button-row">
+                <button class="primary" id="save-telegram-config" type="button">Save Telegram Bot</button>
+                <button class="ghost section-toggle" id="telegram-advanced-toggle" type="button" aria-expanded="false">Advanced</button>
+              </div>
+              <p class="auth-support" id="telegram-stored-token">No Telegram bot token stored yet.</p>
+              <p class="auth-support">After saving the token, start the bot here and send <code>/start</code> to it in Telegram. No second token is normally required.</p>
+              <div class="secret-panel-body" id="telegram-advanced-body" hidden>
+                <label>
+                  Allowed Chat IDs
+                  <input id="telegram-allowed-chat-ids-input" type="text" placeholder="Optional comma-separated chat IDs">
+                </label>
+                <label>
+                  Default Provider
+                  <select id="telegram-provider-input">
+                    <option value="openai">ChatGPT</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="ollama">Ollama</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="gemini">Gemini</option>
+                  </select>
+                </label>
+                <label>
+                  Default Model
+                  <input id="telegram-model-input" type="text" placeholder="gpt-5.2-codex">
+                </label>
+                <label>
+                  Workspace
+                  <input id="telegram-cwd-input" type="text" placeholder="/path/to/project">
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
             <h3>Software Updates</h3>
             <button class="ghost" id="refresh-updates" type="button">Check Now</button>
           </div>
@@ -1877,6 +1958,28 @@
     const openAIAuthNextActionEl = document.getElementById("openai-auth-next-action");
     const openAIAuthCommandEl = document.getElementById("openai-auth-command");
     const copyOpenAICommandButton = document.getElementById("copy-openai-command");
+    const refreshTelegramButton = document.getElementById("refresh-telegram");
+    const telegramPanelEl = document.getElementById("telegram-panel");
+    const telegramTitleEl = document.getElementById("telegram-title");
+    const telegramDetailEl = document.getElementById("telegram-detail");
+    const telegramStatusEl = document.getElementById("telegram-status");
+    const telegramBotNameEl = document.getElementById("telegram-bot-name");
+    const telegramProviderEl = document.getElementById("telegram-provider");
+    const telegramNextActionEl = document.getElementById("telegram-next-action");
+    const telegramCommandEl = document.getElementById("telegram-command");
+    const telegramStartButton = document.getElementById("telegram-start");
+    const telegramStopButton = document.getElementById("telegram-stop");
+    const telegramConfigToggleButton = document.getElementById("telegram-config-toggle");
+    const telegramConfigBodyEl = document.getElementById("telegram-config-body");
+    const telegramAdvancedToggleButton = document.getElementById("telegram-advanced-toggle");
+    const telegramAdvancedBodyEl = document.getElementById("telegram-advanced-body");
+    const telegramTokenInputEl = document.getElementById("telegram-token-input");
+    const telegramAllowedChatIdsInputEl = document.getElementById("telegram-allowed-chat-ids-input");
+    const telegramProviderInputEl = document.getElementById("telegram-provider-input");
+    const telegramModelInputEl = document.getElementById("telegram-model-input");
+    const telegramCwdInputEl = document.getElementById("telegram-cwd-input");
+    const telegramStoredTokenEl = document.getElementById("telegram-stored-token");
+    const saveTelegramConfigButton = document.getElementById("save-telegram-config");
     const refreshUpdatesButton = document.getElementById("refresh-updates");
     const installUpdateButton = document.getElementById("install-update");
     const updatePanelEl = document.getElementById("update-panel");
@@ -1897,12 +2000,15 @@
     let streamingMessageEl = null;
     let openAIAuthState = null;
     let ollamaRuntimeState = null;
+    let telegramState = null;
     let updateState = null;
     let isInstallingUpdate = false;
     let providerSecretState = null;
     let providerKeyPanelOpen = false;
     let availableProviderSecrets = [];
     let ollamaConfigOpen = false;
+    let telegramConfigOpen = false;
+    let telegramAdvancedOpen = false;
 
     const metadataHeartbeatMs = 60000;
     const updateHeartbeatMs = 300000;
@@ -1964,6 +2070,16 @@
     refreshOpenRouterButton.addEventListener("click", refreshOpenRouterModels);
     refreshOpenAIAuthButton.addEventListener("click", refreshOpenAIAuthStatus);
     copyOpenAICommandButton.addEventListener("click", copyOpenAICommand);
+    refreshTelegramButton.addEventListener("click", () => refreshTelegramStatus(false));
+    telegramStartButton.addEventListener("click", startTelegramBot);
+    telegramStopButton.addEventListener("click", stopTelegramBot);
+    telegramConfigToggleButton.addEventListener("click", () => {
+      setTelegramConfigOpen(!telegramConfigOpen);
+    });
+    telegramAdvancedToggleButton.addEventListener("click", () => {
+      setTelegramAdvancedOpen(!telegramAdvancedOpen);
+    });
+    saveTelegramConfigButton.addEventListener("click", saveTelegramConfig);
     refreshUpdatesButton.addEventListener("click", () => refreshUpdateStatus(false, true));
     installUpdateButton.addEventListener("click", installUpdate);
     providerKeyToggleButton.addEventListener("click", () => {
@@ -2011,6 +2127,7 @@
       await refreshProviderSecretState(providerKeyProviderEl.value, true);
       await refreshOllamaStatus(true);
       await refreshOpenAIAuthStatus(true);
+      await refreshTelegramStatus(true);
       await refreshUpdateStatus(true, false);
       await refreshSessions();
       setStatus("Ready. Start a session to begin.", false);
@@ -2438,6 +2555,20 @@
       ollamaConfigToggleButton.setAttribute("aria-expanded", String(nextOpen));
     }
 
+    function setTelegramConfigOpen(nextOpen) {
+      telegramConfigOpen = nextOpen;
+      telegramConfigBodyEl.hidden = !nextOpen;
+      telegramConfigToggleButton.textContent = nextOpen ? "Hide" : "Configure";
+      telegramConfigToggleButton.setAttribute("aria-expanded", String(nextOpen));
+    }
+
+    function setTelegramAdvancedOpen(nextOpen) {
+      telegramAdvancedOpen = nextOpen;
+      telegramAdvancedBodyEl.hidden = !nextOpen;
+      telegramAdvancedToggleButton.textContent = nextOpen ? "Hide Advanced" : "Advanced";
+      telegramAdvancedToggleButton.setAttribute("aria-expanded", String(nextOpen));
+    }
+
     function syncProviderSecretOptions(providers = []) {
       const previousValue = providerKeyProviderEl.value;
 
@@ -2578,6 +2709,66 @@
       }
     }
 
+    async function refreshTelegramStatus(silent = false) {
+      try {
+        const response = await fetch("/api/integrations/telegram/status");
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to load Telegram setup.");
+        }
+
+        telegramState = payload.telegram;
+        renderTelegramPanel();
+
+        if (!silent) {
+          setStatus("Telegram setup refreshed.", false);
+          addActivity("Telegram checked", telegramState.detail, telegramState.status === "configured" ? "success" : "info");
+        }
+      } catch (error) {
+        telegramState = null;
+        renderTelegramPanel(error.message || String(error));
+        if (!silent) {
+          setStatus(error.message || String(error), true);
+          addActivity("Telegram check failed", error.message || String(error), "error");
+        }
+      }
+    }
+
+    async function saveTelegramConfig() {
+      const botToken = telegramTokenInputEl.value.trim();
+      saveTelegramConfigButton.disabled = true;
+      setStatus("Saving Telegram bot setup...", false);
+
+      try {
+        const response = await fetch("/api/integrations/telegram/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            botToken,
+            allowedChatIds: telegramAllowedChatIdsInputEl.value.trim(),
+            provider: telegramProviderInputEl.value,
+            model: telegramModelInputEl.value.trim(),
+            cwd: telegramCwdInputEl.value.trim(),
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to save Telegram bot setup.");
+        }
+
+        telegramState = payload.telegram;
+        telegramTokenInputEl.value = "";
+        renderTelegramPanel();
+        setStatus("Telegram bot saved locally.", false);
+        addActivity("Telegram configured", telegramState.detail, telegramState.status === "configured" ? "success" : "info");
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        addActivity("Telegram save failed", error.message || String(error), "error");
+      } finally {
+        saveTelegramConfigButton.disabled = false;
+      }
+    }
+
     function renderProviderSecretPanel(errorMessage = "") {
       if (!availableProviderSecrets.length) {
         providerKeySummaryEl.textContent = "All set";
@@ -2669,6 +2860,55 @@
       openAIAuthCommandEl.textContent = openAIAuthState.actionCommand;
       copyOpenAICommandButton.textContent = openAIAuthState.actionLabel;
       openAIAuthPanelEl.dataset.status = openAIAuthState.status;
+    }
+
+    function renderTelegramPanel(errorMessage = "") {
+      if (!telegramState) {
+        telegramTitleEl.textContent = errorMessage ? "Telegram setup unavailable" : "Checking Telegram setup...";
+        telegramDetailEl.textContent = errorMessage || "Paste a Telegram bot token here so this workspace can answer through your bot.";
+        telegramStatusEl.textContent = errorMessage ? "Unavailable" : "Loading";
+        telegramStatusEl.className = "status-pill status-missing-auth";
+        telegramBotNameEl.textContent = "Unavailable";
+        telegramProviderEl.textContent = "Unknown";
+        telegramNextActionEl.textContent = errorMessage ? "Try refreshing the panel after the local server settles." : "Waiting for the first Telegram setup check.";
+        telegramCommandEl.textContent = "npm run telegram";
+        telegramStoredTokenEl.textContent = errorMessage ? "Telegram setup status unavailable." : "No Telegram bot token stored yet.";
+        telegramPanelEl.dataset.status = "missing-auth";
+        telegramStartButton.disabled = true;
+        telegramStopButton.disabled = true;
+        return;
+      }
+
+      telegramTitleEl.textContent = telegramState.status === "configured"
+        ? "Telegram bot is ready."
+        : telegramState.status === "error"
+          ? "Telegram bot needs attention."
+          : "Telegram bot still needs setup.";
+      telegramDetailEl.textContent = telegramState.detail;
+      telegramStatusEl.textContent = formatProviderStatus(telegramState.status);
+      telegramStatusEl.className = `status-pill status-${telegramState.status}`;
+      telegramBotNameEl.textContent = telegramState.botUsername;
+      telegramProviderEl.textContent = telegramState.provider;
+      telegramNextActionEl.textContent = telegramState.nextAction;
+      telegramCommandEl.textContent = telegramState.launchCommand;
+      telegramStoredTokenEl.textContent = telegramState.hasToken
+        ? `Stored token: ${telegramState.maskedToken}`
+        : "No Telegram bot token stored yet.";
+      telegramAllowedChatIdsInputEl.value = telegramState.allowedChatIds || "";
+      telegramProviderInputEl.value = telegramState.provider || "openai";
+      telegramModelInputEl.value = telegramState.model || "";
+      telegramCwdInputEl.value = telegramState.cwd || "";
+      telegramPanelEl.dataset.status = telegramState.status;
+      telegramStartButton.disabled = !telegramState.hasToken || telegramState.runtimeStatus === "running";
+      telegramStopButton.disabled = telegramState.runtimeStatus !== "running";
+
+      if (!telegramState.hasToken || telegramState.botUsername === "Token check failed") {
+        setTelegramConfigOpen(true);
+      }
+
+      if (!telegramState.allowedChatIds) {
+        setTelegramAdvancedOpen(false);
+      }
     }
 
     function renderUpdatePanel(errorMessage = "") {
@@ -3099,7 +3339,58 @@
           }
         }
       }
+
       return null;
+    }
+
+    async function startTelegramBot() {
+      telegramStartButton.disabled = true;
+      setStatus("Starting Telegram bot...", false);
+
+      try {
+        const response = await fetch("/api/integrations/telegram/start", {
+          method: "POST",
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to start Telegram bot.");
+        }
+
+        telegramState = payload.telegram;
+        renderTelegramPanel();
+        setStatus("Telegram bot is running.", false);
+        addActivity("Telegram started", telegramState.detail, telegramState.status === "configured" ? "success" : "info");
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        addActivity("Telegram start failed", error.message || String(error), "error");
+      } finally {
+        telegramStartButton.disabled = false;
+      }
+    }
+
+    async function stopTelegramBot() {
+      telegramStopButton.disabled = true;
+      setStatus("Stopping Telegram bot...", false);
+
+      try {
+        const response = await fetch("/api/integrations/telegram/stop", {
+          method: "POST",
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to stop Telegram bot.");
+        }
+
+        telegramState = payload.telegram;
+        renderTelegramPanel();
+        setStatus("Telegram bot stopped.", false);
+        addActivity("Telegram stopped", telegramState.detail, "info");
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        addActivity("Telegram stop failed", error.message || String(error), "error");
+      } finally {
+        telegramStopButton.disabled = false;
+      }
     }
 
     function modelSpotlightSecondary(provider, modelValue) {

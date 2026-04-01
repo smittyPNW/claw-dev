@@ -17,8 +17,26 @@ WRAPPER_PATH="${SUPPORT_DIR}/gui-service.sh"
 STDOUT_LOG="${LOG_DIR}/gui.stdout.log"
 STDERR_LOG="${LOG_DIR}/gui.stderr.log"
 GUI_PORT="${CLAW_GUI_PORT:-4310}"
+DIST_ENTRY="${REPO_ROOT}/dist/guiServer.js"
+
+needs_build() {
+  if [ ! -f "${DIST_ENTRY}" ]; then
+    return 0
+  fi
+
+  if find "${REPO_ROOT}/src" -type f \( -name '*.ts' -o -name '*.tsx' \) -newer "${DIST_ENTRY}" | head -n 1 | grep -q .; then
+    return 0
+  fi
+
+  return 1
+}
+
+if needs_build; then
+  (cd "${REPO_ROOT}" && ./node_modules/.bin/tsc -p tsconfig.json)
+fi
 
 mkdir -p "${LAUNCH_AGENTS_DIR}" "${LOG_DIR}" "${SUPPORT_DIR}"
+touch "${STDOUT_LOG}" "${STDERR_LOG}"
 cat > "${WRAPPER_PATH}" <<EOF
 #!/bin/zsh
 set -euo pipefail
@@ -48,9 +66,9 @@ if [ -z "\${NODE_PATH}" ]; then
   echo "Could not find Node.js to start the Claw Dev GUI service."
   exit 1
 fi
-exec "\${NODE_PATH}" "${REPO_ROOT}/node_modules/tsx/dist/cli.mjs" "${REPO_ROOT}/src/guiServer.ts"
+exec "\${NODE_PATH}" "${REPO_ROOT}/dist/guiServer.js"
 EOF
-chmod +x "${WRAPPER_PATH}" "${REPO_ROOT}/scripts/gui-service.sh"
+chmod +x "${WRAPPER_PATH}"
 
 cat > "${PLIST_PATH}" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

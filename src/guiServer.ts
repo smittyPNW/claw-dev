@@ -1,16 +1,19 @@
 import { randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
 import { createReadStream, existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import { CodingAgent } from "./agent.js";
 import { loadConfig } from "./config.js";
 import { getOpenAIAuthPanelState } from "./guiAuth.js";
 import { getOllamaRuntimeState, saveOllamaRuntimeConfig } from "./guiOllama.js";
 import { getProviderSecretState, saveProviderSecret, type KeyBackedProvider } from "./guiSecrets.js";
+import { getTelegramSetupState, saveTelegramSetup } from "./guiTelegram.js";
 import { getUpdateCheckState, installAvailableUpdate } from "./guiUpdate.js";
 import { getGuiModelGroups, getOpenRouterCatalogState, startOpenRouterHeartbeat } from "./modelCatalog.js";
 import type { ProviderName } from "./providers.js";
@@ -47,6 +50,14 @@ type OllamaConfigRequest = {
   apiKey?: string;
 };
 
+type TelegramConfigRequest = {
+  botToken?: string;
+  allowedChatIds?: string;
+  provider?: string;
+  model?: string;
+  cwd?: string;
+};
+
 type SessionSummary = {
   id: string;
   provider: ProviderName;
@@ -65,6 +76,7 @@ const indexPath = path.join(repoRoot, "index.html");
 const sessions = new Map<string, SessionRecord>();
 
 const GUI_PORT = Number(process.env.CLAW_GUI_PORT || "4310");
+const execFileAsync = promisify(execFile);
 startOpenRouterHeartbeat();
 const server = createServer(async (req, res) => {
   try {
@@ -158,6 +170,37 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, {
         ok: true,
         auth: getOpenAIAuthPanelState({ env: process.env }),
+      });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/integrations/telegram/status") {
+      return sendJson(res, 200, {
+        ok: true,
+        telegram: await getTelegramSetupState(process.env),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/integrations/telegram/config") {
+      const body = (await readJson(req)) as TelegramConfigRequest;
+      return sendJson(res, 200, {
+        ok: true,
+        telegram: await saveTelegramSetup(repoRoot, body, process.env),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/integrations/telegram/start") {
+      await runRepoScript("telegram-start.sh");
+      return sendJson(res, 200, {
+        ok: true,
+        telegram: await getTelegramSetupState(process.env),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/integrations/telegram/stop") {
+      await runRepoScript("telegram-stop.sh");
+      return sendJson(res, 200, {
+        ok: true,
+        telegram: await getTelegramSetupState(process.env),
       });
     }
 
@@ -544,4 +587,23 @@ function httpError(status: number, message: string): Error & { status: number } 
 
 function isHttpError(error: unknown): error is Error & { status: number } {
   return typeof error === "object" && error !== null && "status" in error;
+}
+
+async function runRepoScript(scriptName: string): Promise<void> {
+  const scriptPath = path.join(repoRoot, "scripts", scriptName);
+
+  try {
+    await execFileAsync("/bin/zsh", [scriptPath], {
+      cwd: repoRoot,
+      env: process.env,
+    });
+  } catch (error) {
+    const stderr = typeof error === "object" && error !== null && "stderr" in error
+      ? String(error.stderr || "").trim()
+      : "";
+    const stdout = typeof error === "object" && error !== null && "stdout" in error
+      ? String(error.stdout || "").trim()
+      : "";
+    throw httpError(500, stderr || stdout || `Failed to run ${scriptName}.`);
+  }
 }

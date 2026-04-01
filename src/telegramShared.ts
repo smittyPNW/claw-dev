@@ -127,6 +127,17 @@ export function splitTelegramMessage(text: string, limit = TELEGRAM_MESSAGE_LIMI
   return chunks.filter((chunk) => chunk.length > 0);
 }
 
+export function parseAllowedChatIds(raw?: string): Set<number> {
+  return new Set(
+    String(raw ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0)
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value)),
+  );
+}
+
 function normalizeProvider(value: string): ProviderName | undefined {
   const normalized = value.trim().toLowerCase();
   if (!PROVIDERS.has(normalized as ProviderName)) {

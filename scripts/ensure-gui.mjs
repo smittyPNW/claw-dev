@@ -13,10 +13,8 @@ const repoRoot = path.resolve(__dirname, "..");
 const guiPort = Number(process.env.CLAW_GUI_PORT || "4310");
 const guiUrl = process.env.CLAW_GUI_URL || `http://127.0.0.1:${guiPort}`;
 const logPath = path.join(process.env.TMPDIR || os.tmpdir(), "claw-dev-gui.log");
-const serverEntry = path.join(repoRoot, "src", "guiServer.ts");
-const tsxEntry = path.join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs");
-const launchAgentScript = path.join(repoRoot, "scripts", "install-launch-agent.sh");
-const launchAgentLabel = "com.smittypnw.clawdev.gui";
+const serverEntry = path.join(repoRoot, "dist", "guiServer.js");
+const guiStartScript = path.join(repoRoot, "scripts", "gui-start.sh");
 
 const args = new Set(process.argv.slice(2));
 
@@ -28,11 +26,7 @@ if (!nodePath) {
 
 const wasHealthy = await isGuiHealthy();
 if (!wasHealthy) {
-  if (process.platform === "darwin") {
-    await ensureMacLaunchAgent(nodePath);
-  } else {
-    await startGuiDetached(nodePath);
-  }
+  await ensureGuiRuntime(nodePath);
   await waitForGui();
 }
 
@@ -79,7 +73,7 @@ async function startGuiDetached(nodeBinary) {
   const logStream = createWriteStream(logPath, { flags: "a" });
   logStream.write(`[${new Date().toISOString()}] Ensuring Claw Dev GUI runtime.\n`);
 
-  const child = spawn(nodeBinary, [tsxEntry, serverEntry], {
+  const child = spawn(nodeBinary, [serverEntry], {
     cwd: repoRoot,
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],
@@ -94,21 +88,21 @@ async function startGuiDetached(nodeBinary) {
   child.unref();
 }
 
-async function ensureMacLaunchAgent(nodeBinary) {
-  const launchAgentResult = await runCommand("/bin/zsh", [launchAgentScript], {
-    NODE_BIN: nodeBinary,
-    CLAW_GUI_PORT: String(guiPort),
-  });
+async function ensureGuiRuntime(nodeBinary) {
+  if (process.platform === "darwin") {
+    const startResult = await runCommand("/bin/zsh", [guiStartScript], {
+      NODE_BIN: nodeBinary,
+      CLAW_GUI_PORT: String(guiPort),
+    });
 
-  if (launchAgentResult.exitCode !== 0) {
-    process.stderr.write(launchAgentResult.stderr || "Claw Dev GUI LaunchAgent install failed.\n");
-    process.exit(1);
+    if (startResult.exitCode !== 0) {
+      process.stderr.write(startResult.stderr || "Claw Dev GUI service start failed.\n");
+      process.exit(1);
+    }
+    return;
   }
 
-  const kickstartResult = await runCommand("/bin/launchctl", ["kickstart", "-k", `gui/${process.getuid()}/${launchAgentLabel}`]);
-  if (kickstartResult.exitCode !== 0 && kickstartResult.stderr.trim().length > 0) {
-    process.stderr.write(kickstartResult.stderr);
-  }
+  await startGuiDetached(nodeBinary);
 }
 
 async function waitForGui() {

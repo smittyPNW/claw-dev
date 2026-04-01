@@ -12,5 +12,10 @@ if [ ! -d "${HOME}/Desktop" ]; then
   exit 0
 fi
 
-/bin/zsh "${REPO_ROOT}/scripts/install-launch-agent.sh"
-/bin/zsh "${REPO_ROOT}/scripts/install-desktop-shortcut.sh"
+if [ "${CLAW_DEV_AUTO_SETUP:-0}" = "1" ]; then
+  /bin/zsh "${REPO_ROOT}/scripts/setup-macos.sh"
+  exit 0
+fi
+
+echo "Claw Dev postinstall finished without changing macOS services or Desktop shortcuts."
+echo "Run 'npm run setup:macos' when you want the LaunchAgent and Desktop app installed."

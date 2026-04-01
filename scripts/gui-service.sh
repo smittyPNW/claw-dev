@@ -4,8 +4,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NODE_BIN="${NODE_BIN:-}"
-TSX_ENTRY="${REPO_ROOT}/node_modules/tsx/dist/cli.mjs"
-GUI_ENTRY="${REPO_ROOT}/src/guiServer.ts"
+GUI_ENTRY="${REPO_ROOT}/dist/guiServer.js"
 
 resolve_node_path() {
   if [ -n "${NODE_BIN}" ] && [ -x "${NODE_BIN}" ]; then
@@ -30,4 +29,9 @@ if [ -z "${NODE_PATH}" ]; then
   exit 1
 fi
 
-exec "${NODE_PATH}" "${TSX_ENTRY}" "${GUI_ENTRY}"
+if [ ! -f "${GUI_ENTRY}" ]; then
+  echo "Built GUI entry not found at ${GUI_ENTRY}. Run the GUI build first."
+  exit 1
+fi
+
+exec "${NODE_PATH}" "${GUI_ENTRY}"

@@ -43,8 +43,8 @@ Claw Dev is one project with multiple ways in:
   - visual local control room for provider setup, model selection, sessions, updates, and health
 - `TUI`
   - focused terminal coding interface with direct chat, command shortcuts, and shared agent logic
-- `Launcher`
-  - bundled richer interactive flow for the original terminal experience in this repo
+- `Launcher (Legacy)`
+  - compatibility path retained from the original repo while the direct app remains the primary product surface
 - `Telegram`
   - remote chat interface that can talk to the same coding engine from your phone or another machine
 
@@ -76,10 +76,10 @@ Claw Dev is strongest when you want flexibility without losing product flow:
 
 | Path | Command | Best for | Providers | Notes |
 |---|---|---|---|---|
-| Full launcher | `npm run claw-dev` | richest interactive product flow | Anthropic, OpenAI, Gemini, Groq, OpenRouter, Copilot, z.ai, Ollama | bundled client, provider chooser, local compatibility proxy |
+| Legacy launcher | `npm run claw-dev` | compatibility with the bundled terminal client | Anthropic, OpenAI, Gemini, Groq, OpenRouter, Copilot, z.ai, Ollama | legacy bundled client, provider chooser, local compatibility proxy |
 | Direct TS app | `npm run dev -- ...` | fast iteration and development loops | Anthropic, Gemini, OpenAI, OpenRouter, Ollama | lighter CLI and REPL, easier to extend and test |
 | Browser GUI | `npm run gui` | local operator control room | Anthropic, Gemini, OpenAI, OpenRouter, Ollama | provider health, model selection, sessions, updates, Ollama runtime scan |
-| Telegram bot | `npm run telegram` | remote coding chat from Telegram | Anthropic, Gemini, OpenAI, OpenRouter, Ollama | per-chat sessions, shared agent core, command-driven setup |
+| Telegram bot | `npm run telegram` | remote coding chat from Telegram | Anthropic, Gemini, OpenAI, OpenRouter, Ollama | managed local bot service, per-chat sessions, shared agent core |
 
 ## Feature Highlights
 
@@ -128,6 +128,7 @@ Claw Dev is meant to feel installed, not just cloned.
 
 - desktop shortcut support on macOS
 - LaunchAgent-backed GUI runtime on macOS
+- explicit `npm run setup:macos` install step for LaunchAgent and Desktop shortcut setup
 - GUI, TUI, launcher, and Telegram all point at the same broader product
 - update checks from GitHub with install support when the repo is clean
 

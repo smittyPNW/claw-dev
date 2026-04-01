@@ -15,6 +15,8 @@ const guiUrl = process.env.CLAW_GUI_URL || `http://127.0.0.1:${guiPort}`;
 const logPath = path.join(process.env.TMPDIR || os.tmpdir(), "claw-dev-gui.log");
 const serverEntry = path.join(repoRoot, "src", "guiServer.ts");
 const tsxEntry = path.join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs");
+const launchAgentScript = path.join(repoRoot, "scripts", "install-launch-agent.sh");
+const launchAgentLabel = "com.smittypnw.clawdev.gui";
 
 const args = new Set(process.argv.slice(2));
 
@@ -26,7 +28,11 @@ if (!nodePath) {
 
 const wasHealthy = await isGuiHealthy();
 if (!wasHealthy) {
-  await startGuiDetached(nodePath);
+  if (process.platform === "darwin") {
+    await ensureMacLaunchAgent(nodePath);
+  } else {
+    await startGuiDetached(nodePath);
+  }
   await waitForGui();
 }
 
@@ -88,6 +94,23 @@ async function startGuiDetached(nodeBinary) {
   child.unref();
 }
 
+async function ensureMacLaunchAgent(nodeBinary) {
+  const launchAgentResult = await runCommand("/bin/zsh", [launchAgentScript], {
+    NODE_BIN: nodeBinary,
+    CLAW_GUI_PORT: String(guiPort),
+  });
+
+  if (launchAgentResult.exitCode !== 0) {
+    process.stderr.write(launchAgentResult.stderr || "Claw Dev GUI LaunchAgent install failed.\n");
+    process.exit(1);
+  }
+
+  const kickstartResult = await runCommand("/bin/launchctl", ["kickstart", "-k", `gui/${process.getuid()}/${launchAgentLabel}`]);
+  if (kickstartResult.exitCode !== 0 && kickstartResult.stderr.trim().length > 0) {
+    process.stderr.write(kickstartResult.stderr);
+  }
+}
+
 async function waitForGui() {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     if (await isGuiHealthy()) {
@@ -98,4 +121,34 @@ async function waitForGui() {
 
   process.stderr.write(`Claw Dev GUI did not respond at ${guiUrl}.\n`);
   process.exit(1);
+}
+
+function runCommand(command, args, extraEnv = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        ...extraEnv,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("close", (exitCode) => {
+      resolve({
+        exitCode: exitCode ?? 1,
+        stdout,
+        stderr,
+      });
+    });
+  });
 }

@@ -394,6 +394,10 @@
       color: #9ec7ff;
     }
 
+    .status-local-ready {
+      color: var(--success);
+    }
+
     .provider-detail,
     .provider-model,
     .auth-detail,
@@ -2370,18 +2374,21 @@
       }
 
       providerHealthEl.innerHTML = metadata.providers
-        .map((provider) => `
+        .map((provider) => {
+          const providerStatus = resolveProviderCardStatus(provider);
+          return `
           <li class="provider-item ${provider.value === "ollama" ? "jumpable" : ""}" ${provider.value === "ollama" ? 'data-provider-jump="ollama"' : ""}>
             <div class="provider-row">
               <strong>${escapeHtml(provider.label)}</strong>
-              ${provider.status === "missing-key" && supportsProviderSecret(provider.value)
-                ? `<button class="status-pill status-${escapeAttribute(provider.status)} provider-action" type="button" data-provider-secret="${escapeAttribute(provider.value)}">${escapeHtml(formatProviderStatus(provider.status))}</button>`
-                : `<span class="status-pill status-${escapeAttribute(provider.status)}">${escapeHtml(formatProviderStatus(provider.status))}</span>`}
+              ${providerStatus === "missing-key" && supportsProviderSecret(provider.value)
+                ? `<button class="status-pill status-${escapeAttribute(providerStatus)} provider-action" type="button" data-provider-secret="${escapeAttribute(provider.value)}">${escapeHtml(formatProviderStatus(providerStatus))}</button>`
+                : `<span class="status-pill status-${escapeAttribute(providerStatus)}">${escapeHtml(formatProviderStatus(providerStatus))}</span>`}
             </div>
             <p class="provider-model">${escapeHtml(provider.defaultModel)}</p>
             <p class="provider-detail">${escapeHtml(provider.detail)}</p>
           </li>
-        `)
+        `;
+        })
         .join("");
 
       providerHealthEl.querySelectorAll("[data-provider-secret]").forEach((button) => {
@@ -3050,9 +3057,19 @@
           return "error";
         case "local":
           return "local";
+        case "local-ready":
+          return "local";
         default:
           return status;
       }
+    }
+
+    function resolveProviderCardStatus(provider) {
+      if (provider?.value === "ollama" && provider.runtime?.reachable && provider.runtime?.modelCount > 0) {
+        return "local-ready";
+      }
+
+      return provider.status;
     }
 
     function formatAuthType(authType) {

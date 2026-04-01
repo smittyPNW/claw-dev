@@ -2,18 +2,64 @@
 
 ![Claw Dev cover art](assets/readme/claw-dev-cover.jpg)
 
-Claw Dev is a local multi-provider coding assistant launcher for the bundled terminal client in this repository. It gives you one entry point and lets you choose how model requests are resolved at startup:
+Claw Dev is a multi-surface coding workspace built for people who want one tool that can speak cloud, local, terminal, browser, and now Telegram.
 
-- Anthropic direct mode with `ANTHROPIC_API_KEY`
-- OpenAI through a local Anthropic-compatible proxy
-- Google Gemini through a local Anthropic-compatible proxy
-- Groq through a local Anthropic-compatible proxy
-- OpenRouter through a local Anthropic-compatible proxy
-- Copilot through the GitHub Models API
-- z.ai through a local Anthropic-compatible proxy
-- Ollama through a local Anthropic-compatible proxy
+It gives you a single project with:
 
-Claw Dev is designed to feel like one tool rather than a provider-specific wrapper. The launcher, provider prompts, environment variables, and documentation are all centered around the `Claw Dev` name.
+- a bundled terminal-first launcher
+- a lighter direct TypeScript app
+- a browser GUI control room
+- a Telegram bot front end
+- shared provider-aware agent logic across all of them
+
+Claw Dev is built around the idea that your coding assistant should not force you into one model vendor or one interface. You can start in the GUI, keep working in the TUI, and hand the same style of task off through Telegram without switching products.
+
+## Why Claw Dev
+
+- ChatGPT Codex as the preferred OpenAI lane when saved auth is available
+- OpenRouter integration with live free-model heartbeat and smart defaults
+- Ollama integration with local runtime detection and installed-model discovery
+- browser GUI for visual control, provider setup, updates, and session workflow
+- terminal UI for focused local coding sessions
+- Telegram bot support for remote prompt-and-response coding workflows
+- desktop launcher and macOS-native GUI service install
+- provider health, update checks, and safer local configuration flows
+
+## What It Can Do
+
+- Route coding requests through Anthropic, OpenAI, Gemini, OpenRouter, Ollama, Groq, Copilot, and z.ai
+- Prefer ChatGPT Codex locally when this machine already has reusable auth
+- Highlight strong OpenRouter free models and keep them refreshed automatically
+- Detect a live Ollama runtime, list installed local models, and guide local setup
+- Run as a browser app, terminal app, bundled launcher, or Telegram bot
+- Keep the GUI available on macOS through a LaunchAgent-backed runtime
+- Offer a desktop shortcut that launches the app stack directly
+
+## Surfaces
+
+Claw Dev is one project with multiple ways in:
+
+- `GUI`
+  - visual local control room for provider setup, model selection, sessions, updates, and health
+- `TUI`
+  - focused terminal coding interface with direct chat, command shortcuts, and shared agent logic
+- `Launcher`
+  - bundled richer interactive flow for the original terminal experience in this repo
+- `Telegram`
+  - remote chat interface that can talk to the same coding engine from your phone or another machine
+
+## Provider Story
+
+Claw Dev is strongest when you want flexibility without losing product flow:
+
+- `ChatGPT Codex`
+  - best when you want OpenAI-first coding and the machine already has saved auth
+- `OpenRouter`
+  - best when you want the biggest hosted model catalog, current free models, and easy model switching
+- `Ollama`
+  - best when you want local models, privacy, or zero recurring API cost after setup
+- `Anthropic` and `Gemini`
+  - strong direct or proxy-backed alternatives for cloud-first coding sessions
 
 ## Repository Layout
 
@@ -30,8 +76,60 @@ Claw Dev is designed to feel like one tool rather than a provider-specific wrapp
 
 | Path | Command | Best for | Providers | Notes |
 |---|---|---|---|---|
-| Full launcher | `npm run claw-dev` | main interactive product flow | Anthropic, OpenAI, Gemini, Groq, OpenRouter, Copilot, z.ai, Ollama | richest UX, bundled client, provider chooser, local compatibility proxy |
-| Direct TS app | `npm run dev -- ...` | development, testing, lighter local loop | Anthropic, Gemini, OpenRouter, Ollama | simpler CLI and REPL, easier to iterate on, fewer product features than the bundled launcher |
+| Full launcher | `npm run claw-dev` | richest interactive product flow | Anthropic, OpenAI, Gemini, Groq, OpenRouter, Copilot, z.ai, Ollama | bundled client, provider chooser, local compatibility proxy |
+| Direct TS app | `npm run dev -- ...` | fast iteration and development loops | Anthropic, Gemini, OpenAI, OpenRouter, Ollama | lighter CLI and REPL, easier to extend and test |
+| Browser GUI | `npm run gui` | local operator control room | Anthropic, Gemini, OpenAI, OpenRouter, Ollama | provider health, model selection, sessions, updates, Ollama runtime scan |
+| Telegram bot | `npm run telegram` | remote coding chat from Telegram | Anthropic, Gemini, OpenAI, OpenRouter, Ollama | per-chat sessions, shared agent core, command-driven setup |
+
+## Feature Highlights
+
+### Telegram Integration
+
+Claw Dev can run as a Telegram bot, giving you a remote coding chat surface that still uses the same provider logic as the local app.
+
+- per-chat session memory
+- provider switching by command
+- model switching by command
+- workspace switching by command
+- plain messages go straight into the coding loop
+
+Core commands:
+
+- `/help`
+- `/status`
+- `/reset`
+- `/provider openai`
+- `/model gpt-5.2-codex`
+- `/cwd /path/to/workspace`
+
+### OpenRouter Integration
+
+OpenRouter is treated as a first-class path, not just an API key field.
+
+- live model catalog refresh
+- heartbeat-based free-model checks
+- preference for strong free hosted models when available
+- direct support for provider-qualified model ids
+- model selection surfaced in the GUI and direct app path
+
+### Local Model Integration
+
+Claw Dev treats local models as a real product path through Ollama.
+
+- automatic Ollama runtime detection
+- installed-model discovery
+- curated smaller coding-model recommendations
+- GUI setup flow for base URL and local runtime status
+- green ready state when Ollama is reachable with usable local models
+
+### Native Local Workflow
+
+Claw Dev is meant to feel installed, not just cloned.
+
+- desktop shortcut support on macOS
+- LaunchAgent-backed GUI runtime on macOS
+- GUI, TUI, launcher, and Telegram all point at the same broader product
+- update checks from GitHub with install support when the repo is clean
 
 ## Supported Providers
 
@@ -59,13 +157,13 @@ Use a Groq API key and route requests through the local compatibility proxy.
 
 Use an OpenRouter API key and route requests through the local compatibility proxy.
 
-This is the most flexible cloud option if you want to choose from a large hosted catalog and paste raw provider-qualified model ids such as `anthropic/claude-sonnet-4` or `google/gemini-2.5-pro`.
+This is the most flexible cloud option if you want a huge hosted catalog, current free-model discovery, and raw provider-qualified model ids such as `anthropic/claude-sonnet-4` or `google/gemini-2.5-pro`.
 
 ### Ollama
 
 Use a local or remote Ollama server and route requests through the local compatibility proxy.
 
-This is the best option if you want local inference and do not want to depend on a cloud API provider.
+This is the best option if you want local inference, stronger privacy, and a coding setup that does not depend on a cloud provider being available.
 
 ### Copilot
 
@@ -194,6 +292,42 @@ npm run gui
 
 This starts a local web interface at `http://127.0.0.1:4310` by default. The GUI keeps the browser launch opt-in, shows provider health, tracks in-memory sessions, and presents OpenRouter and Ollama as first-class direct app options.
 
+To pair Claw Dev with Telegram, create a Telegram bot token with BotFather, add it to `.env`, and run:
+
+```bash
+npm run telegram
+```
+
+Telegram-specific environment variables:
+
+- `TELEGRAM_BOT_TOKEN`
+  - required to start the bot
+- `TELEGRAM_ALLOWED_CHAT_IDS`
+  - optional comma-separated allowlist for private or group chats
+- `TELEGRAM_PROVIDER`
+  - optional default provider for new Telegram chats
+- `TELEGRAM_MODEL`
+  - optional default model for new Telegram chats
+- `TELEGRAM_CWD`
+  - optional default working directory for Telegram sessions
+
+Supported Telegram commands:
+
+- `/help`
+- `/status`
+- `/reset`
+- `/provider openai`
+- `/model gpt-5.2-codex`
+- `/cwd /path/to/workspace`
+
+If you want the fastest way to understand the product:
+
+1. Start the GUI with `npm run gui`
+2. Try ChatGPT Codex if this machine already has saved auth
+3. Try OpenRouter for hosted model variety
+4. Try Ollama for local-only coding with installed models
+5. Add Telegram when you want the same coding flow from outside the desktop
+
 `npm start` is an alias for the same launcher:
 
 ```bash
@@ -231,8 +365,6 @@ If a required API key is missing, Claw Dev prompts for it.
 After you choose a provider, Claw Dev also lets you enter any model id you want for that session. You can press Enter to keep the suggested default, or type a custom model id such as:
 
 - `gpt-4.1`
-- `gpt-5-mini`
-- `gpt-5.2`
 - `gpt-5.2-codex`
 - `gemini-2.5-pro`
 - `openai/gpt-oss-120b`
@@ -291,13 +423,13 @@ Recommended `.env` values:
 
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-5-mini
-OPENAI_MODEL_HAIKU=gpt-5-nano
-OPENAI_MODEL_SONNET=gpt-5-mini
+OPENAI_MODEL=gpt-5.2-codex
+OPENAI_MODEL_HAIKU=gpt-5.2-codex
+OPENAI_MODEL_SONNET=gpt-5.2-codex
 OPENAI_MODEL_OPUS=gpt-5.2-codex
 ```
 
-If `~/.codex/auth.json` exists, Claw Dev can reuse that ChatGPT/Codex login as an experimental fallback. Example placeholder values such as `your_openai_api_key_here` are ignored. The in-app `/model` picker is filtered toward the active provider where possible, but provider-specific labels may still appear. Keyring-backed Codex auth is not supported yet.
+If `~/.codex/auth.json` exists, Claw Dev can reuse that ChatGPT/Codex login as an experimental fallback. Example placeholder values such as `your_openai_api_key_here` are ignored. The in-app `/model` picker is filtered toward the active provider where possible, and the ChatGPT lane is intentionally centered on Codex. Keyring-backed Codex auth is not supported yet.
 
 ## How To Use Ollama With Claw Dev
 
@@ -437,10 +569,8 @@ Practical guidance:
   - especially useful if you want to swap between Anthropic, Google, OpenAI, and open models without changing providers
 - OpenAI
   - solid general-purpose cloud option
-  - best when you specifically want the current GPT-family coding models
-  - `gpt-5-mini` is the best default balance
-  - `gpt-5.2` is the stronger general upgrade
-  - `gpt-5.2-codex` is the best OpenAI-first option when coding quality matters more than cost
+  - best when you specifically want the current GPT-family coding model path
+  - `gpt-5.2-codex` is the preferred OpenAI-first coding default in this project
 - Groq
   - best when low latency matters more than raw context budget
   - open model selection is strong, but tool-heavy sessions can still vary by model
@@ -462,8 +592,7 @@ If you want the least friction:
 - Best non-Anthropic cloud flow
   - Gemini with `gemini-2.5-flash` or `gemini-2.5-pro`
 - Best OpenAI-first flow
-  - OpenAI with `gpt-5-mini` for everyday coding
-  - switch to `gpt-5.2` or `gpt-5.2-codex` for harder coding and planning work
+  - OpenAI with `gpt-5.2-codex`
 - Best maximum model control
   - OpenRouter with explicit provider-qualified model ids
 - Best free or almost-free experimentation
@@ -505,9 +634,7 @@ If you want Claw Dev to feel strong on day one, start with these:
   - `gemini-2.5-flash` for fast general use
   - `gemini-2.5-pro` for heavier reasoning and larger tasks
 - OpenAI
-  - `gpt-5-mini` as the default balance
-  - `gpt-5.2` for stronger all-around work
-  - `gpt-5.2-codex` when you specifically want stronger coding behavior
+  - `gpt-5.2-codex` as the primary coding choice in this project
 - OpenRouter
   - `anthropic/claude-sonnet-4` for a Claude-like hosted flow
   - `google/gemini-2.5-pro` for long-context reasoning
@@ -544,7 +671,7 @@ ANTHROPIC_MODEL=claude-sonnet-4-20250514
 
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-5-mini
+OPENAI_MODEL=gpt-5.2-codex
 ```
 
 If you already ran `codex login`, you can leave `OPENAI_API_KEY` unset and Claw Dev will reuse `~/.codex/auth.json` as an experimental fallback. Example placeholder values are treated as unset.
@@ -645,7 +772,7 @@ Skip the provider menu and force a specific provider:
 You can also skip the default model prompt and force any model id directly:
 
 ```powershell
-.\claw-dev.cmd --provider openai --model gpt-5-mini
+.\claw-dev.cmd --provider openai --model gpt-5.2-codex
 .\claw-dev.cmd --provider gemini --model gemini-2.5-pro
 .\claw-dev.cmd --provider groq --model openai/gpt-oss-120b
 .\\claw-dev.cmd --provider openrouter --model anthropic/claude-sonnet-4
@@ -657,14 +784,14 @@ You can also skip the default model prompt and force any model id directly:
 Equivalent macOS or Linux examples:
 
 ```bash
-./claw-dev.sh --provider openai --model gpt-5-mini
+./claw-dev.sh --provider openai --model gpt-5.2-codex
 ./claw-dev.sh --provider ollama --model qwen2.5-coder:14b
 ```
 
 If you want extra suggestions to appear in the proxy model catalog, you can define optional comma-separated model lists:
 
 ```env
-OPENAI_MODELS=gpt-5-mini,gpt-5.2,gpt-5-nano,gpt-5.2-codex,gpt-4.1,o3-mini,o4-mini
+OPENAI_MODELS=gpt-5.2-codex
 GEMINI_MODELS=gemini-2.5-flash,gemini-2.5-pro,gemma-3-27b-it
 GROQ_MODELS=openai/gpt-oss-20b,openai/gpt-oss-120b,qwen/qwen3-32b
 OPENROUTER_MODELS=openrouter/free,openai/gpt-oss-20b:free,meta-llama/llama-3.3-70b-instruct:free,anthropic/claude-sonnet-4,google/gemini-2.5-flash,google/gemini-2.5-pro,openai/gpt-oss-120b,meta-llama/llama-3.3-70b-instruct

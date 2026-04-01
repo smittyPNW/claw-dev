@@ -12,4 +12,5 @@ if [ ! -d "${HOME}/Desktop" ]; then
   exit 0
 fi
 
-"${REPO_ROOT}/scripts/install-desktop-shortcut.sh"
+/bin/zsh "${REPO_ROOT}/scripts/install-launch-agent.sh"
+/bin/zsh "${REPO_ROOT}/scripts/install-desktop-shortcut.sh"

@@ -9,6 +9,8 @@
     "check": "tsc --noEmit -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "gui": "tsx src/guiServer.ts",
+    "telegram": "tsx src/telegramBot.ts",
+    "install:launch-agent": "/bin/zsh ./scripts/install-launch-agent.sh",
     "install:desktop": "./scripts/install-desktop-shortcut.sh",
     "postinstall": "./scripts/postinstall.sh",
     "claw-dev": "node Leonxlnx-claude-code/claw-dev-launcher.js",

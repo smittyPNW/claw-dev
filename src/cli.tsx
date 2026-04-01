@@ -1,10 +1,12 @@
+import { spawn } from "node:child_process";
+
 import React, { useCallback, useMemo, useState } from "react";
 import { Box, Newline, render, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 
 import type { CodingAgent } from "./agent.js";
 import { toolDefinitions } from "./tools.js";
-import type { ProviderName } from "./providers.js";
+import type { ProviderName, TurnEvent } from "./providers.js";
 
 const TUI_THEME = {
   shellTint: "#d8f1ff",
@@ -19,12 +21,11 @@ const TUI_THEME = {
 };
 
 const ASCII_BANNER = [
-  "  ______ _                    ____             ",
-  " / ____/| |                  / __ \\___ _   __ ",
-  "/ /     | |    __ ___      _/ / / / _ \\ | / / ",
-  "\\ \\___  | |___/ //_/ |/|/ / /_/ /  __/ |/ /  ",
-  " \\____/ |_____/_,_/|__,__/_____/\\___/|___/   ",
-  "            ChatGPT, OpenRouter, Ollama      ",
+  "   ________                ____            ",
+  "  / ____/ /___ __      __ / __ \\___ _   __ ",
+  " / /   / / __ `/ | /| / // / / / _ \\ | / / ",
+  "/ /___/ / /_/ /| |/ |/ // /_/ /  __/ |/ /  ",
+  "\\____/_/\\__,_/ |__/|__/ \\____/\\___/|___/   ",
 ];
 
 type StartReplOptions = {
@@ -94,6 +95,8 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
   ]);
   const [input, setInput] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [liveStatus, setLiveStatus] = useState("Ready to code.");
+  const [lastToolNote, setLastToolNote] = useState("No tools used yet.");
 
   useInput((input, key) => {
     if (key.escape && !isBusy) {
@@ -106,11 +109,11 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
 
   const sidebarLines = useMemo(
     () => [
-      "Ask naturally to inspect, search, and edit the workspace.",
-      "Use /tools to inspect the available local capabilities.",
-      "Use /clear to reset the conversation state.",
-      "Use /status to reprint the current backend details.",
-      "Use /exit or Esc to quit.",
+      "/help command list",
+      "/tools local tool catalog",
+      "/status provider, model, cwd",
+      "/gui open the browser workspace",
+      "/clear reset session memory",
     ],
     [],
   );
@@ -129,7 +132,7 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
         return;
       }
 
-      if (line === "/clear") {
+      if (line === "/clear" || line === "/reset") {
         agent.clear();
         setEntries([
           {
@@ -146,7 +149,7 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
           { role: "user", text: line },
           {
             role: "system",
-            text: ["/help", "/tools", "/status", "/clear", "/exit"].join("\n"),
+            text: ["/help", "/tools", "/status", "/gui", "/clear", "/exit"].join("\n"),
           },
         ]);
         return;
@@ -176,11 +179,28 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
         return;
       }
 
+      if (line === "/gui") {
+        openGui(options.guiUrl);
+        setEntries((current) => [
+          ...current,
+          { role: "user", text: line },
+          {
+            role: "system",
+            text: `Opened GUI: ${options.guiUrl}`,
+          },
+        ]);
+        return;
+      }
+
       setEntries((current) => [...current, { role: "user", text: line }]);
       setIsBusy(true);
+      setLiveStatus("Thinking...");
+      setLastToolNote("Waiting on model response.");
 
       try {
-        const result = await agent.runTurn(line);
+        const result = await agent.runTurn(line, (event) => {
+          handleTurnEvent(event, setLiveStatus, setLastToolNote);
+        });
         setEntries((current) => [
           ...current,
           {
@@ -196,8 +216,10 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
             text: error instanceof Error ? error.message : String(error),
           },
         ]);
+        setLiveStatus("Request failed.");
       } finally {
         setIsBusy(false);
+        setLiveStatus((current) => (current === "Request failed." ? current : "Ready for the next turn."));
       }
     },
     [agent, exit, isBusy],
@@ -205,48 +227,44 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text color={TUI_THEME.muted} italic>
-        Esc or Ctrl+C to exit
-      </Text>
-      <Box marginTop={1} borderStyle="round" borderColor={TUI_THEME.border} flexDirection="column" paddingX={1} paddingY={1}>
-        <Box flexDirection="column">
+      <Box borderStyle="round" borderColor={TUI_THEME.border} flexDirection="column" paddingX={1} paddingY={1}>
+        <Box justifyContent="space-between">
+          <Text color={TUI_THEME.muted}>Esc or Ctrl+C to exit</Text>
+          <Text color={TUI_THEME.assistant}>GUI {options.guiUrl}</Text>
+        </Box>
+        <Box marginTop={1} flexDirection="column">
           {ASCII_BANNER.map((line) => (
             <Text key={line} color={TUI_THEME.accent}>
               {line}
             </Text>
           ))}
         </Box>
-        <Box>
+        <Box justifyContent="space-between" marginTop={1}>
           <Text backgroundColor={TUI_THEME.shellTint} color={TUI_THEME.shellText}>
             {" "}
             {badgeLabelForProvider(options.provider)}
             {" "}
           </Text>
+          <Text color={isBusy ? TUI_THEME.system : TUI_THEME.assistant}>{isBusy ? "busy" : "ready"}</Text>
         </Box>
-        <Box marginTop={1} flexDirection="column">
-          <Text color={TUI_THEME.accent}>
-            {titleForProvider(options.provider)} v0.2
-          </Text>
-          <Text color={TUI_THEME.muted}>{subtitleForProvider(options.provider)}</Text>
-        </Box>
-        <Box marginTop={1}>
-          <Box width="52%" flexDirection="column" paddingRight={2}>
-            <Text backgroundColor={TUI_THEME.shellTint} color={TUI_THEME.shellText}>
-              {" Session Ready "}
-            </Text>
-            <Text color={TUI_THEME.accentSoft}>
-              Backend: {options.provider} · Model: {options.model}
-            </Text>
-            <Text color={TUI_THEME.accentSoft}>CWD: {options.cwd}</Text>
-            <Text color={TUI_THEME.assistant}>GUI: {options.guiUrl}</Text>
-            <Text color={TUI_THEME.accent}>
-              {"      /\\_/\\\\\n .--. ( o.o )\n(____/  > ^ <"}
-            </Text>
+        <Box marginTop={1} justifyContent="space-between">
+          <Box flexDirection="column" width="58%">
+            <Text color={TUI_THEME.accent}>{titleForProvider(options.provider)} v0.3</Text>
+            <Text color={TUI_THEME.muted}>{subtitleForProvider(options.provider)}</Text>
           </Box>
-          <Box width="48%" flexDirection="column" borderLeft borderColor={TUI_THEME.border} paddingLeft={2}>
-            <Text backgroundColor={TUI_THEME.shellTint} color={TUI_THEME.shellText}>
-              {" Workflow "}
-            </Text>
+          <Box flexDirection="column" width="42%">
+            <Text color={TUI_THEME.accentSoft}>Model {options.model}</Text>
+            <Text color={TUI_THEME.accentSoft}>Workspace {options.cwd}</Text>
+          </Box>
+        </Box>
+        <Box marginTop={1} borderStyle="single" borderColor={TUI_THEME.border} paddingX={1} paddingY={0}>
+          <Box width="55%" flexDirection="column" paddingRight={2}>
+            <Text color={TUI_THEME.system}>Status</Text>
+            <Text color={TUI_THEME.accentSoft}>{liveStatus}</Text>
+            <Text color={TUI_THEME.muted}>{lastToolNote}</Text>
+          </Box>
+          <Box width="45%" flexDirection="column" borderLeft borderColor={TUI_THEME.border} paddingLeft={2}>
+            <Text color={TUI_THEME.system}>Commands</Text>
             {sidebarLines.map((line, index) => (
               <Text key={`${line}-${index}`} color={TUI_THEME.accentSoft}>
                 {line}
@@ -255,10 +273,8 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
           </Box>
         </Box>
       </Box>
-      <Box marginTop={1}>
-        <Text color={TUI_THEME.muted}>Interactive coding session with local tools. Use /help for commands.</Text>
-      </Box>
-      <Box flexDirection="column" marginTop={1}>
+      <Box marginTop={1} borderStyle="round" borderColor={TUI_THEME.border} flexDirection="column" paddingX={1} paddingY={0}>
+        <Text color={TUI_THEME.system}>Transcript</Text>
         {entries.slice(-10).map((entry, index) => (
           <Box key={`${entry.role}-${index}`} marginBottom={1} flexDirection="column">
             <Text
@@ -282,13 +298,16 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
           <Newline />
         </Text>
       ) : null}
-      <Box borderStyle="single" borderColor={TUI_THEME.border} paddingX={1}>
+      <Box marginTop={1} borderStyle="round" borderColor={TUI_THEME.border} flexDirection="column" paddingX={1} paddingY={0}>
+        <Text color={TUI_THEME.system}>Compose</Text>
+        <Box>
         <Text color={TUI_THEME.accent}>{"> "}</Text>
         <TextInput value={input} onChange={setInput} onSubmit={submit} />
+        </Box>
       </Box>
       <Box marginTop={1}>
         <Text backgroundColor={TUI_THEME.shellTint} color={TUI_THEME.shellText}>
-          {" Commands: /help /tools /status /clear /exit "}
+          {" Commands: /help /tools /status /gui /clear /exit "}
         </Text>
       </Box>
     </Box>
@@ -298,4 +317,29 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
 export async function startRepl(agent: CodingAgent, options: StartReplOptions): Promise<void> {
   const instance = render(<App agent={agent} options={options} />);
   await instance.waitUntilExit();
+}
+
+function handleTurnEvent(
+  event: TurnEvent,
+  setLiveStatus: React.Dispatch<React.SetStateAction<string>>,
+  setLastToolNote: React.Dispatch<React.SetStateAction<string>>,
+): void {
+  if (event.type === "status") {
+    setLiveStatus(event.message);
+    return;
+  }
+
+  if (event.type === "tool_start") {
+    setLastToolNote(`Tool ${event.toolName} started${event.inputSummary ? ` · ${event.inputSummary}` : ""}`);
+    return;
+  }
+
+  setLastToolNote(
+    `${event.toolName} ${event.isError ? "failed" : "finished"}${event.contentPreview ? ` · ${event.contentPreview}` : ""}`,
+  );
+}
+
+function openGui(url: string): void {
+  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+  spawn(opener, [url], { detached: true, stdio: "ignore", shell: process.platform === "win32" }).unref();
 }

@@ -1,27 +1,1504 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Random Website</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f4f4;
-            color: #333;
-        }
-        h1 {
-            color: #0056b3;
-        }
-        p {
-            line-height: 1.6;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claw Dev Control Room</title>
+  <style>
+    :root {
+      --bg: #0b1018;
+      --bg-soft: #101725;
+      --panel: rgba(12, 18, 28, 0.78);
+      --panel-strong: rgba(18, 25, 37, 0.92);
+      --panel-light: rgba(255, 248, 240, 0.92);
+      --ink: #f8f1e8;
+      --ink-dark: #12161c;
+      --muted: rgba(244, 235, 224, 0.7);
+      --muted-dark: rgba(18, 22, 28, 0.62);
+      --line: rgba(255, 255, 255, 0.09);
+      --line-strong: rgba(255, 255, 255, 0.16);
+      --accent: #d97242;
+      --accent-strong: #f39962;
+      --accent-soft: rgba(217, 114, 66, 0.16);
+      --success: #6fd6a5;
+      --warning: #f3b35d;
+      --danger: #ff8d73;
+      --radius-xl: 32px;
+      --radius-lg: 24px;
+      --radius-md: 18px;
+      --radius-sm: 14px;
+      --shadow: 0 36px 120px rgba(0, 0, 0, 0.38);
+      --font-display: "Avenir Next", "Helvetica Neue", "Segoe UI", sans-serif;
+      --font-body: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-body);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 0% 0%, rgba(243, 153, 98, 0.2), transparent 28%),
+        radial-gradient(circle at 100% 0%, rgba(81, 123, 255, 0.12), transparent 26%),
+        linear-gradient(180deg, #06090f 0%, #0b1018 42%, #101826 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 82%);
+      opacity: 0.24;
+    }
+
+    .shell {
+      width: min(1440px, calc(100vw - 40px));
+      margin: 20px auto;
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(22px);
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 20px;
+      padding: 22px;
+      display: grid;
+      gap: 18px;
+      overflow: hidden;
+    }
+
+    .sidebar::before {
+      content: "";
+      position: absolute;
+      inset: auto -40% 58% 12%;
+      height: 220px;
+      background: radial-gradient(circle, rgba(217, 114, 66, 0.24), transparent 68%);
+      filter: blur(24px);
+      pointer-events: none;
+    }
+
+    .stack {
+      position: relative;
+      display: grid;
+      gap: 14px;
+      z-index: 1;
+    }
+
+    .brand {
+      display: grid;
+      grid-template-columns: 84px minmax(0, 1fr);
+      gap: 16px;
+      align-items: center;
+    }
+
+    .brand-mark {
+      width: 84px;
+      height: 84px;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.04);
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.24);
+    }
+
+    .brand-mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .eyebrow {
+      margin: 0 0 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-strong);
+    }
+
+    h1, h2, h3, h4 {
+      margin: 0;
+      font-family: var(--font-display);
+      line-height: 1.02;
+      font-weight: 700;
+    }
+
+    .brand h1 {
+      font-size: 34px;
+    }
+
+    .brand p:last-child,
+    .lede,
+    .helper,
+    .mini-copy,
+    .session-subline,
+    .activity-copy,
+    .message-body,
+    .empty p {
+      line-height: 1.55;
+    }
+
+    .lede {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .section {
+      display: grid;
+      gap: 12px;
+      padding-top: 4px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .section-head h3 {
+      font-size: 15px;
+      letter-spacing: 0.01em;
+    }
+
+    .helper {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 0;
+    }
+
+    label {
+      display: grid;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: rgba(248, 241, 232, 0.78);
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      font: inherit;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--ink);
+      padding: 13px 14px;
+      outline: none;
+      transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: rgba(243, 153, 98, 0.9);
+      background: rgba(255, 255, 255, 0.08);
+      transform: translateY(-1px);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 132px;
+    }
+
+    button {
+      border: 0;
+      border-radius: var(--radius-md);
+      padding: 13px 16px;
+      cursor: pointer;
+      transition: transform 140ms ease, opacity 140ms ease, filter 140ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.04);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.56;
+      transform: none;
+      filter: none;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent) 0%, #ed8e59 100%);
+      color: white;
+      font-weight: 700;
+    }
+
+    .secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .ghost {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--ink);
+    }
+
+    .provider-health,
+    .session-list,
+    .activity-list,
+    .command-list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .provider-item,
+    .session-item,
+    .activity-item {
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      overflow: hidden;
+    }
+
+    .provider-item {
+      padding: 14px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .provider-row,
+    .session-row,
+    .activity-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .provider-row strong,
+    .session-row strong,
+    .activity-row strong {
+      font-size: 14px;
+    }
+
+    .status-pill,
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 7px 11px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .status-configured {
+      color: var(--success);
+    }
+
+    .status-missing-key {
+      color: var(--warning);
+    }
+
+    .status-local {
+      color: #9ec7ff;
+    }
+
+    .provider-detail,
+    .provider-model,
+    .session-subline,
+    .activity-copy,
+    .empty p {
+      color: var(--muted);
+      font-size: 13px;
+      margin: 0;
+    }
+
+    .session-item button {
+      width: 100%;
+      padding: 14px;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+    }
+
+    .session-item button:hover {
+      transform: none;
+      background: rgba(255, 255, 255, 0.04);
+      filter: none;
+    }
+
+    .session-item.active {
+      border-color: rgba(243, 153, 98, 0.42);
+      background: rgba(217, 114, 66, 0.12);
+    }
+
+    .session-title {
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .session-subline code {
+      color: rgba(255, 255, 255, 0.84);
+      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+      font-size: 12px;
+    }
+
+    .command-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .command-list button {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--ink);
+      padding: 10px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .main {
+      display: grid;
+      gap: 16px;
+    }
+
+    .masthead {
+      min-height: 300px;
+      padding: 28px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+      gap: 18px;
+      overflow: hidden;
+      position: relative;
+      background:
+        radial-gradient(circle at 14% 18%, rgba(217, 114, 66, 0.2), transparent 24%),
+        linear-gradient(135deg, rgba(11, 16, 24, 0.92), rgba(16, 23, 37, 0.84));
+    }
+
+    .masthead-copy {
+      display: grid;
+      align-content: space-between;
+      gap: 18px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .masthead h2 {
+      font-size: clamp(42px, 5.8vw, 76px);
+      letter-spacing: -0.04em;
+      max-width: 9.5ch;
+    }
+
+    .masthead-copy p {
+      margin: 0;
+      max-width: 58ch;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .metric-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .metric {
+      padding: 14px 16px;
+      min-width: 132px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .masthead-visual {
+      position: relative;
+      min-height: 360px;
+      border-radius: 28px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background:
+        linear-gradient(180deg, rgba(7, 10, 14, 0.14), rgba(7, 10, 14, 0.92)),
+        url("/assets/gui/chatgpt-worx-hero.png") center center / cover no-repeat;
+      box-shadow: inset 0 -80px 140px rgba(0, 0, 0, 0.42);
+      transform: translateZ(0);
+      animation: visualFloat 14s ease-in-out infinite;
+    }
+
+    .masthead-visual::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(130deg, rgba(243, 153, 98, 0.06), transparent 36%),
+        linear-gradient(180deg, transparent 34%, rgba(9, 12, 17, 0.88));
+    }
+
+    .visual-copy {
+      position: absolute;
+      inset: auto 20px 20px 20px;
+      display: grid;
+      gap: 10px;
+      z-index: 1;
+    }
+
+    .visual-copy h3 {
+      font-size: 24px;
+      max-width: 10ch;
+    }
+
+    .visual-copy p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.72);
+      max-width: 34ch;
+      font-size: 14px;
+    }
+
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 16px;
+    }
+
+    .workspace-panel {
+      padding: 18px;
+      background: rgba(255, 248, 240, 0.94);
+      color: var(--ink-dark);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .workspace-panel .eyebrow {
+      color: #b25c33;
+    }
+
+    .workspace-panel h3 {
+      font-size: 18px;
+    }
+
+    .workspace-panel p,
+    .workspace-panel li,
+    .workspace-panel label,
+    .workspace-panel .helper,
+    .workspace-panel .activity-copy,
+    .workspace-panel .mini-copy {
+      color: var(--muted-dark);
+    }
+
+    .signal-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .chip {
+      background: rgba(18, 22, 28, 0.04);
+      border-color: rgba(18, 22, 28, 0.08);
+      color: rgba(18, 22, 28, 0.7);
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .chip strong {
+      color: var(--ink-dark);
+    }
+
+    .transcript-shell {
+      display: grid;
+      gap: 14px;
+    }
+
+    .transcript {
+      min-height: 470px;
+      max-height: 720px;
+      overflow: auto;
+      display: grid;
+      gap: 12px;
+      align-content: start;
+      padding-right: 6px;
+    }
+
+    .message {
+      max-width: min(88%, 880px);
+      padding: 16px 18px;
+      border-radius: 22px;
+      border: 1px solid rgba(18, 22, 28, 0.08);
+      box-shadow: 0 18px 44px rgba(18, 22, 28, 0.08);
+      white-space: normal;
+      animation: fadeSlide 260ms ease;
+    }
+
+    .message.user {
+      justify-self: end;
+      background: linear-gradient(135deg, rgba(217, 114, 66, 0.16), rgba(255, 255, 255, 0.9));
+    }
+
+    .message.assistant {
+      justify-self: start;
+      background: white;
+    }
+
+    .message.system {
+      justify-self: start;
+      background: rgba(18, 22, 28, 0.06);
+    }
+
+    .message .label {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(18, 22, 28, 0.46);
+    }
+
+    .message-body {
+      color: rgba(18, 22, 28, 0.88);
+      font-size: 14px;
+    }
+
+    .empty {
+      min-height: 360px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 24px;
+      border: 1px dashed rgba(18, 22, 28, 0.12);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.66);
+    }
+
+    .empty h3 {
+      font-size: 26px;
+      margin-bottom: 10px;
+    }
+
+    .composer {
+      display: grid;
+      gap: 12px;
+      padding-top: 8px;
+    }
+
+    .status-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .status-copy {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted-dark);
+    }
+
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(18, 22, 28, 0.06);
+      border: 1px solid rgba(18, 22, 28, 0.08);
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(18, 22, 28, 0.74);
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: rgba(18, 22, 28, 0.24);
+      box-shadow: 0 0 0 0 rgba(111, 214, 165, 0);
+    }
+
+    .live-badge.live .dot {
+      background: var(--success);
+      animation: pulse 1.6s ease-out infinite;
+    }
+
+    .live-badge.busy .dot {
+      background: var(--accent);
+      animation: pulseWarm 1.1s ease-out infinite;
+    }
+
+    .activity-list {
+      max-height: 380px;
+      overflow: auto;
+    }
+
+    .activity-item {
+      padding: 14px;
+      background: rgba(18, 22, 28, 0.03);
+      border-color: rgba(18, 22, 28, 0.08);
+    }
+
+    .activity-time {
+      color: rgba(18, 22, 28, 0.48);
+      font-size: 12px;
+    }
+
+    .mini-copy {
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .workspace-panel code {
+      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+      font-size: 12px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(111, 214, 165, 0.38); }
+      70% { box-shadow: 0 0 0 12px rgba(111, 214, 165, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(111, 214, 165, 0); }
+    }
+
+    @keyframes pulseWarm {
+      0% { box-shadow: 0 0 0 0 rgba(217, 114, 66, 0.34); }
+      70% { box-shadow: 0 0 0 12px rgba(217, 114, 66, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(217, 114, 66, 0); }
+    }
+
+    @keyframes visualFloat {
+      0%, 100% { transform: translateY(0px) scale(1); }
+      50% { transform: translateY(-6px) scale(1.01); }
+    }
+
+    @keyframes fadeSlide {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 1240px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+      }
+
+      .masthead,
+      .workspace-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(100vw - 16px, 100%);
+        margin: 8px auto 16px;
+        gap: 12px;
+      }
+
+      .panel,
+      .sidebar,
+      .workspace-panel,
+      .masthead-visual {
+        border-radius: 22px;
+      }
+
+      .sidebar,
+      .masthead,
+      .workspace-panel {
+        padding: 16px;
+      }
+
+      .brand {
+        grid-template-columns: 68px minmax(0, 1fr);
+      }
+
+      .brand-mark {
+        width: 68px;
+        height: 68px;
+        border-radius: 18px;
+      }
+
+      .brand h1 {
+        font-size: 28px;
+      }
+
+      .masthead {
+        min-height: auto;
+      }
+
+      .masthead h2 {
+        max-width: 12ch;
+      }
+
+      .masthead-visual {
+        min-height: 280px;
+      }
+
+      .command-list {
+        grid-template-columns: 1fr;
+      }
+
+      .message {
+        max-width: 100%;
+      }
+    }
+  </style>
 </head>
 <body>
-    <h1>Welcome to My Random Website!</h1>
-    <p>This is a randomly generated single HTML file. It's a starting point for whatever you'd like to build next.</p>
-    <p>Feel free to modify this content and add more elements like images, links, or more complex layouts.</p>
+  <div class="shell">
+    <aside class="panel sidebar">
+      <div class="stack">
+        <section class="brand">
+          <div class="brand-mark">
+            <img src="/assets/readme/chatgpt-worx.png" alt="Claw Dev brand image">
+          </div>
+          <div>
+            <p class="eyebrow">Local Control Room</p>
+            <h1>Claw Dev UI</h1>
+            <p class="lede">A browser front end for the direct TypeScript agent path, with OpenRouter and Ollama ready for local work.</p>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <h3>Session Setup</h3>
+            <span class="status-pill" id="setup-summary">Waiting</span>
+          </div>
+
+          <label>
+            Provider
+            <select id="provider"></select>
+          </label>
+
+          <label>
+            Model
+            <input id="model" type="text" placeholder="anthropic/claude-sonnet-4">
+          </label>
+
+          <label>
+            Workspace
+            <input id="cwd" type="text" placeholder="/path/to/repo">
+          </label>
+
+          <div class="button-row">
+            <button class="primary" id="start-session">Start Session</button>
+            <button class="secondary" id="reset-session" disabled>Reset</button>
+          </div>
+
+          <p class="helper">The GUI opens on demand. Sessions stay local and in memory so the backend can remain usable without a forced browser launch.</p>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <h3>Provider Health</h3>
+            <span class="helper" id="provider-health-summary">Loading...</span>
+          </div>
+          <ul class="provider-health" id="provider-health"></ul>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <h3>Recent Sessions</h3>
+            <button class="ghost" id="refresh-sessions" type="button">Refresh</button>
+          </div>
+          <ul class="session-list" id="session-list"></ul>
+          <p class="helper">Resume an in-memory session to keep working with the same provider, model, and workspace.</p>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <h3>Prompt Shortcuts</h3>
+          </div>
+          <div class="command-list">
+            <button type="button" data-template="Inspect this repository and summarize the main architecture.">Architecture</button>
+            <button type="button" data-template="Find the OpenRouter implementation path and explain how requests flow through it.">OpenRouter flow</button>
+            <button type="button" data-template="Review the current workspace for broken tests, weak spots, and cleanup opportunities.">Review workspace</button>
+            <button type="button" data-template="Compare the direct TypeScript app path with the bundled launcher and summarize the gaps.">Compare paths</button>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="panel masthead">
+        <div class="masthead-copy">
+          <div>
+            <p class="eyebrow">Direct App Path</p>
+            <h2>Beautiful local control for serious coding work.</h2>
+          </div>
+
+          <p>
+            The goal here is not a dashboard mosaic. It is a focused operator surface: pick the model route, keep the workspace visible, watch session health, and move from exploration to execution without losing the thread.
+          </p>
+
+          <div class="metric-row">
+            <div class="metric">
+              <strong id="metric-provider-count">0</strong>
+              <span>providers exposed here</span>
+            </div>
+            <div class="metric">
+              <strong id="metric-session-count">0</strong>
+              <span>live sessions in memory</span>
+            </div>
+            <div class="metric">
+              <strong id="metric-turn-count">0</strong>
+              <span>turns in active session</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="masthead-visual">
+          <div class="visual-copy">
+            <span class="status-pill">ChatGPT Worx</span>
+            <h3>One project, multiple model lanes.</h3>
+            <p>Use the artwork as atmosphere, not clutter: a dark branded plane on one side, clean operational UI on the other.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace-grid">
+        <section class="panel workspace-panel">
+          <p class="eyebrow">Conversation</p>
+          <div class="status-line">
+            <div>
+              <h3>Session Workspace</h3>
+              <p class="status-copy" id="status">Idle. Configure a provider and start a session to begin.</p>
+            </div>
+            <div class="live-badge" id="session-badge">
+              <span class="dot"></span>
+              <span>No session</span>
+            </div>
+          </div>
+
+          <div class="signal-bar" id="signal-bar">
+            <span class="chip"><strong>Provider</strong>&nbsp;<span id="signal-provider">None</span></span>
+            <span class="chip"><strong>Model</strong>&nbsp;<span id="signal-model">Not selected</span></span>
+            <span class="chip"><strong>Workspace</strong>&nbsp;<span id="signal-cwd">Waiting</span></span>
+          </div>
+
+          <div class="transcript-shell">
+            <section class="transcript" id="transcript">
+              <div class="empty" id="empty-state">
+                <div>
+                  <h3>No active session yet.</h3>
+                  <p>Start a session on the left, then send a prompt to begin the conversation. The transcript view is optimized for working sessions, not generic dashboard noise.</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="composer">
+              <label>
+                <span class="sr-only">Prompt</span>
+                <textarea id="prompt" placeholder="Inspect this repository and tell me where the OpenRouter flow is implemented."></textarea>
+              </label>
+
+              <div class="button-row">
+                <button class="primary" id="send-message" disabled>Send Prompt</button>
+                <button class="secondary" id="clear-composer" type="button">Clear Draft</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <aside class="panel workspace-panel">
+          <p class="eyebrow">Activity</p>
+          <div class="section-head">
+            <h3>Operator Feed</h3>
+            <span class="helper" id="activity-summary">No recent activity</span>
+          </div>
+
+          <ul class="activity-list" id="activity-list"></ul>
+
+          <div class="section">
+            <div class="section-head">
+              <h3>Current Focus</h3>
+            </div>
+            <p class="mini-copy" id="focus-copy">Select a provider, confirm a model, and start a session. The UI will keep the latest lane visible here while you work.</p>
+          </div>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const providerEl = document.getElementById("provider");
+    const modelEl = document.getElementById("model");
+    const cwdEl = document.getElementById("cwd");
+    const startSessionButton = document.getElementById("start-session");
+    const resetSessionButton = document.getElementById("reset-session");
+    const sendMessageButton = document.getElementById("send-message");
+    const clearComposerButton = document.getElementById("clear-composer");
+    const refreshSessionsButton = document.getElementById("refresh-sessions");
+    const promptEl = document.getElementById("prompt");
+    const transcriptEl = document.getElementById("transcript");
+    const emptyStateEl = document.getElementById("empty-state");
+    const statusEl = document.getElementById("status");
+    const sessionBadgeEl = document.getElementById("session-badge");
+    const setupSummaryEl = document.getElementById("setup-summary");
+    const providerHealthSummaryEl = document.getElementById("provider-health-summary");
+    const providerHealthEl = document.getElementById("provider-health");
+    const sessionListEl = document.getElementById("session-list");
+    const activityListEl = document.getElementById("activity-list");
+    const activitySummaryEl = document.getElementById("activity-summary");
+    const focusCopyEl = document.getElementById("focus-copy");
+    const metricProviderCountEl = document.getElementById("metric-provider-count");
+    const metricSessionCountEl = document.getElementById("metric-session-count");
+    const metricTurnCountEl = document.getElementById("metric-turn-count");
+    const signalProviderEl = document.getElementById("signal-provider");
+    const signalModelEl = document.getElementById("signal-model");
+    const signalCwdEl = document.getElementById("signal-cwd");
+
+    let metadata = null;
+    let session = null;
+    let sessions = [];
+    let isBusy = false;
+    let activity = [];
+
+    boot().catch((error) => {
+      setStatus(error.message || String(error), true);
+      addActivity("Boot error", error.message || String(error), "error");
+    });
+
+    providerEl.addEventListener("change", () => {
+      if (!metadata) {
+        return;
+      }
+
+      const selected = getSelectedProviderMeta();
+      if (selected && !modelEl.dataset.touched) {
+        modelEl.value = selected.defaultModel;
+      }
+
+      renderProviderSetup();
+      syncSignals();
+    });
+
+    modelEl.addEventListener("input", () => {
+      modelEl.dataset.touched = "true";
+      renderProviderSetup();
+      syncSignals();
+    });
+
+    cwdEl.addEventListener("input", () => {
+      syncSignals();
+    });
+
+    startSessionButton.addEventListener("click", startSession);
+    resetSessionButton.addEventListener("click", resetSession);
+    sendMessageButton.addEventListener("click", sendPrompt);
+    clearComposerButton.addEventListener("click", () => {
+      promptEl.value = "";
+      promptEl.focus();
+    });
+    refreshSessionsButton.addEventListener("click", refreshSessions);
+
+    promptEl.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        if (!sendMessageButton.disabled) {
+          sendPrompt();
+        }
+      }
+    });
+
+    document.querySelectorAll("[data-template]").forEach((button) => {
+      button.addEventListener("click", () => {
+        promptEl.value = button.dataset.template || "";
+        promptEl.focus();
+      });
+    });
+
+    async function boot() {
+      const response = await fetch("/api/meta");
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "Failed to load GUI metadata.");
+      }
+
+      metadata = payload;
+      providerEl.innerHTML = payload.providers
+        .map((provider) => `<option value="${escapeAttribute(provider.value)}">${escapeHtml(provider.label)}</option>`)
+        .join("");
+
+      const preferred = payload.providers.find((provider) => provider.value === "openrouter" && provider.status !== "missing-key")
+        || payload.providers.find((provider) => provider.status === "configured")
+        || payload.providers.find((provider) => provider.value === "openrouter")
+        || payload.providers[0];
+
+      providerEl.value = preferred.value;
+      cwdEl.value = payload.defaultCwd;
+      modelEl.value = preferred.defaultModel;
+      modelEl.dataset.touched = "";
+
+      metricProviderCountEl.textContent = String(payload.providers.length);
+      renderProviderHealth();
+      renderProviderSetup();
+      syncSignals();
+      await refreshSessions();
+      setStatus("Ready. Start a session to begin.", false);
+      addActivity("Control room ready", `Default lane: ${preferred.label}.`, "info");
+    }
+
+    async function refreshSessions() {
+      const response = await fetch("/api/sessions");
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "Failed to load sessions.");
+      }
+
+      sessions = payload.sessions || [];
+      metricSessionCountEl.textContent = String(sessions.length);
+      renderSessionList();
+    }
+
+    async function startSession() {
+      setBusy(true, "Starting session...");
+      try {
+        const response = await fetch("/api/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: providerEl.value,
+            model: modelEl.value.trim(),
+            cwd: cwdEl.value.trim(),
+          }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to create session.");
+        }
+
+        session = payload.session;
+        resetTranscript(false);
+        appendMessage("system", `Session started.\nProvider: ${session.provider}\nModel: ${session.model}\nWorkspace: ${session.cwd}`);
+        updateSessionBadge("live", `${session.provider} live`);
+        setStatus("Session ready. Send a prompt.", false);
+        focusCopyEl.textContent = `Active lane: ${session.provider} on ${session.model}. This workspace is now the live context for prompts and tool runs.`;
+        syncSignals();
+        metricTurnCountEl.textContent = String(session.turns || 0);
+        addActivity("Session started", `${session.provider} · ${session.model}`, "success");
+        await refreshSessions();
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        addActivity("Session start failed", error.message || String(error), "error");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function resetSession() {
+      if (!session) {
+        return;
+      }
+
+      setBusy(true, "Resetting session...");
+      try {
+        const response = await fetch(`/api/sessions/${session.id}/reset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to reset session.");
+        }
+
+        resetTranscript(false);
+        appendMessage("system", `Session reset.\nProvider: ${session.provider}\nModel: ${session.model}\nWorkspace: ${session.cwd}`);
+        setStatus("Session reset. You can continue with a fresh conversation.", false);
+        focusCopyEl.textContent = "The active session is still open, but the working conversation has been cleared for a new pass.";
+        metricTurnCountEl.textContent = "0";
+        addActivity("Session reset", `${session.provider} conversation cleared.`, "info");
+        await refreshSessions();
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        addActivity("Reset failed", error.message || String(error), "error");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function sendPrompt() {
+      if (!session) {
+        setStatus("Start a session first.", true);
+        return;
+      }
+
+      const prompt = promptEl.value.trim();
+      if (!prompt) {
+        setStatus("Prompt cannot be empty.", true);
+        return;
+      }
+
+      appendMessage("user", prompt);
+      promptEl.value = "";
+      setBusy(true, "Running prompt...");
+      updateSessionBadge("busy", `${session.provider} working`);
+      addActivity("Prompt sent", summarizePrompt(prompt), "info");
+      focusCopyEl.textContent = "The agent is working through the current prompt. Keep an eye on the transcript and recent activity for the latest state.";
+
+      const startedAt = performance.now();
+
+      try {
+        const response = await fetch(`/api/sessions/${session.id}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Request failed.");
+        }
+
+        appendMessage("assistant", payload.message || "(empty response)");
+        session = payload.session || session;
+        metricTurnCountEl.textContent = String(session.turns || 0);
+        setStatus("Response complete.", false);
+        updateSessionBadge("live", `${session.provider} live`);
+        focusCopyEl.textContent = "Latest response complete. You can continue the thread, change the prompt direction, or reset the session for a fresh pass.";
+        addActivity("Response complete", `${Math.round(performance.now() - startedAt)} ms · ${session.turns || 0} turns in this lane`, "success");
+        await refreshSessions();
+      } catch (error) {
+        appendMessage("system", error.message || String(error));
+        setStatus(error.message || String(error), true);
+        updateSessionBadge("live", `${session.provider} live`);
+        addActivity("Prompt failed", error.message || String(error), "error");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function renderProviderHealth() {
+      if (!metadata) {
+        return;
+      }
+
+      providerHealthEl.innerHTML = metadata.providers
+        .map((provider) => `
+          <li class="provider-item">
+            <div class="provider-row">
+              <strong>${escapeHtml(provider.label)}</strong>
+              <span class="status-pill status-${escapeAttribute(provider.status)}">${escapeHtml(formatProviderStatus(provider.status))}</span>
+            </div>
+            <p class="provider-model">${escapeHtml(provider.defaultModel)}</p>
+            <p class="provider-detail">${escapeHtml(provider.detail)}</p>
+          </li>
+        `)
+        .join("");
+
+      const configuredCount = metadata.providers.filter((provider) => provider.status === "configured" || provider.status === "local").length;
+      providerHealthSummaryEl.textContent = `${configuredCount}/${metadata.providers.length} ready`;
+    }
+
+    function renderSessionList() {
+      if (!sessions.length) {
+        sessionListEl.innerHTML = `
+          <li class="session-item">
+            <button type="button" disabled>
+              <div class="session-row">
+                <strong>No sessions yet</strong>
+              </div>
+              <p class="session-subline">Start a provider lane to create the first in-memory session.</p>
+            </button>
+          </li>
+        `;
+        return;
+      }
+
+      sessionListEl.innerHTML = sessions
+        .map((item) => `
+          <li class="session-item ${session && item.id === session.id ? "active" : ""}">
+            <button type="button" data-session-id="${escapeAttribute(item.id)}">
+              <div class="session-row">
+                <strong>${escapeHtml(item.provider)} · ${escapeHtml(item.model)}</strong>
+                <span class="helper">${escapeHtml(relativeTime(item.updatedAt))}</span>
+              </div>
+              <p class="session-subline session-title">${escapeHtml(item.lastPrompt || "No prompts yet")}</p>
+              <p class="session-subline"><code>${escapeHtml(item.cwd)}</code></p>
+            </button>
+          </li>
+        `)
+        .join("");
+
+      sessionListEl.querySelectorAll("[data-session-id]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const next = sessions.find((item) => item.id === button.dataset.sessionId);
+          if (!next) {
+            return;
+          }
+
+          session = next;
+          providerEl.value = next.provider;
+          modelEl.value = next.model;
+          cwdEl.value = next.cwd;
+          modelEl.dataset.touched = "true";
+          updateSessionBadge("live", `${next.provider} live`);
+          setStatus("Session resumed. The server-side conversation is still live for this lane.", false);
+          focusCopyEl.textContent = "A stored in-memory session is now active again. The server still has its conversation context, even though the local transcript panel only shows messages from this browser view.";
+          metricTurnCountEl.textContent = String(next.turns || 0);
+          syncSignals();
+          renderProviderSetup();
+          renderSessionList();
+          addActivity("Session resumed", `${next.provider} · ${next.model}`, "info");
+          if (!transcriptEl.querySelector(".message")) {
+            resetTranscript(false);
+            appendMessage("system", `Resumed existing session.\nProvider: ${next.provider}\nModel: ${next.model}\nWorkspace: ${next.cwd}\nTurns so far: ${next.turns}`);
+          }
+        });
+      });
+    }
+
+    function renderProviderSetup() {
+      const selected = getSelectedProviderMeta();
+      if (!selected) {
+        setupSummaryEl.textContent = "Waiting";
+        return;
+      }
+
+      setupSummaryEl.textContent = `${selected.label} ${formatProviderStatus(selected.status)}`;
+      setupSummaryEl.className = `status-pill status-${selected.status}`;
+    }
+
+    function syncSignals() {
+      signalProviderEl.textContent = providerEl.value || "None";
+      signalModelEl.textContent = modelEl.value.trim() || "Not selected";
+      signalCwdEl.textContent = compactPath(cwdEl.value.trim() || "Waiting");
+    }
+
+    function appendMessage(role, text) {
+      emptyStateEl.style.display = "none";
+
+      const article = document.createElement("article");
+      article.className = `message ${role}`;
+      article.innerHTML = `
+        <span class="label">${escapeHtml(role)}</span>
+        <div class="message-body">${escapeHtml(text).replaceAll("\n", "<br>")}</div>
+      `;
+      transcriptEl.appendChild(article);
+      transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    }
+
+    function resetTranscript(showEmpty) {
+      transcriptEl.innerHTML = "";
+      transcriptEl.appendChild(emptyStateEl);
+      emptyStateEl.style.display = showEmpty ? "grid" : "none";
+    }
+
+    function setBusy(nextBusy, label) {
+      isBusy = nextBusy;
+      startSessionButton.disabled = nextBusy;
+      resetSessionButton.disabled = nextBusy || !session;
+      sendMessageButton.disabled = nextBusy || !session;
+      providerEl.disabled = nextBusy;
+      modelEl.disabled = nextBusy;
+      cwdEl.disabled = nextBusy;
+      promptEl.disabled = nextBusy;
+
+      if (label) {
+        setStatus(label, false);
+      }
+
+      if (!nextBusy && session) {
+        updateSessionBadge("live", `${session.provider} live`);
+      } else if (!nextBusy) {
+        updateSessionBadge("idle", "No session");
+      }
+    }
+
+    function setStatus(text, isError) {
+      statusEl.textContent = text;
+      statusEl.style.color = isError ? "#b4482f" : "";
+    }
+
+    function updateSessionBadge(mode, text) {
+      sessionBadgeEl.className = "live-badge";
+      if (mode === "live") {
+        sessionBadgeEl.classList.add("live");
+      }
+      if (mode === "busy") {
+        sessionBadgeEl.classList.add("busy");
+      }
+      sessionBadgeEl.lastElementChild.textContent = text;
+    }
+
+    function addActivity(title, detail, kind) {
+      activity.unshift({
+        title,
+        detail,
+        kind,
+        at: new Date().toISOString(),
+      });
+      activity = activity.slice(0, 8);
+      renderActivity();
+    }
+
+    function renderActivity() {
+      if (!activity.length) {
+        activitySummaryEl.textContent = "No recent activity";
+        activityListEl.innerHTML = `
+          <li class="activity-item">
+            <div class="activity-row">
+              <strong>Nothing running yet</strong>
+            </div>
+            <p class="activity-copy">This feed will show session starts, prompt runs, failures, and other operator-visible state changes.</p>
+          </li>
+        `;
+        return;
+      }
+
+      activitySummaryEl.textContent = `${activity.length} recent events`;
+      activityListEl.innerHTML = activity
+        .map((item) => `
+          <li class="activity-item">
+            <div class="activity-row">
+              <strong>${escapeHtml(item.title)}</strong>
+              <span class="activity-time">${escapeHtml(relativeTime(item.at))}</span>
+            </div>
+            <p class="activity-copy">${escapeHtml(item.detail)}</p>
+          </li>
+        `)
+        .join("");
+    }
+
+    function getSelectedProviderMeta() {
+      if (!metadata) {
+        return null;
+      }
+
+      return metadata.providers.find((provider) => provider.value === providerEl.value) || null;
+    }
+
+    function summarizePrompt(prompt) {
+      const clean = prompt.replaceAll(/\s+/g, " ").trim();
+      return clean.length > 88 ? `${clean.slice(0, 85)}...` : clean;
+    }
+
+    function compactPath(pathValue) {
+      if (pathValue.length <= 34) {
+        return pathValue;
+      }
+      return `${pathValue.slice(0, 14)}...${pathValue.slice(-16)}`;
+    }
+
+    function relativeTime(iso) {
+      const deltaMs = Date.now() - new Date(iso).getTime();
+      const deltaMinutes = Math.round(deltaMs / 60000);
+      if (deltaMinutes < 1) {
+        return "just now";
+      }
+      if (deltaMinutes < 60) {
+        return `${deltaMinutes}m ago`;
+      }
+      const deltaHours = Math.round(deltaMinutes / 60);
+      if (deltaHours < 24) {
+        return `${deltaHours}h ago`;
+      }
+      const deltaDays = Math.round(deltaHours / 24);
+      return `${deltaDays}d ago`;
+    }
+
+    function formatProviderStatus(status) {
+      switch (status) {
+        case "configured":
+          return "ready";
+        case "missing-key":
+          return "needs key";
+        case "local":
+          return "local";
+        default:
+          return status;
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function escapeAttribute(value) {
+      return escapeHtml(value).replaceAll("`", "&#96;");
+    }
+  </script>
 </body>
 </html>

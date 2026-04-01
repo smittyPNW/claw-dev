@@ -1,5 +1,7 @@
 # Claw Dev
 
+![ChatGPT Worx](assets/readme/chatgpt-worx.png)
+
 Claw Dev is a local multi-provider coding assistant launcher for the bundled terminal client in this repository. It gives you one entry point and lets you choose how model requests are resolved at startup:
 
 - Anthropic direct mode with `ANTHROPIC_API_KEY`
@@ -183,6 +185,14 @@ Or point the newer app path at Ollama:
 ```bash
 npm run dev -- --provider ollama --model qwen3 "inspect this repository"
 ```
+
+To launch the newer browser-based control room for the direct app path:
+
+```bash
+npm run gui
+```
+
+This starts a local web interface at `http://127.0.0.1:4310` by default. The GUI keeps the browser launch opt-in, shows provider health, tracks in-memory sessions, and presents OpenRouter and Ollama as first-class direct app options.
 
 `npm start` is an alias for the same launcher:
 

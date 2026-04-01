@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
     "dev": "tsx src/index.ts",
+    "gui": "tsx src/guiServer.ts",
     "claw-dev": "node Leonxlnx-claude-code/claw-dev-launcher.js",
     "proxy:compat": "tsx src/anthropicCompatProxy.ts",
     "proxy:gemini": "tsx src/anthropicCompatProxy.ts",

@@ -328,7 +328,7 @@ const server = createServer(async (req, res) => {
     }
 
     const assetPath = path.join(repoRoot, decodeURIComponent(url.pathname));
-    if (isPathInsideRepo(assetPath) && existsSync(assetPath)) {
+    if (isPathInsideRepo(assetPath) && existsSync(assetPath) && (await stat(assetPath)).isFile()) {
       return sendFile(res, assetPath, contentTypeFor(assetPath));
     }
 
@@ -535,12 +535,20 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 
 async function sendFile(res: ServerResponse, filePath: string, contentType: string): Promise<void> {
   const fileStat = await stat(filePath);
+  if (!fileStat.isFile()) {
+    throw httpError(404, "Not found.");
+  }
   res.writeHead(200, {
     "Content-Type": contentType,
     "Content-Length": fileStat.size,
     "Cache-Control": "no-cache",
   });
-  createReadStream(filePath).pipe(res);
+  await new Promise<void>((resolve, reject) => {
+    const stream = createReadStream(filePath);
+    stream.on("error", reject);
+    stream.on("end", resolve);
+    stream.pipe(res);
+  });
 }
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown): void {

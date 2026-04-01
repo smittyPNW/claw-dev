@@ -955,7 +955,10 @@
                 <h4 id="spotlight-title">Model guidance</h4>
                 <p id="spotlight-description">Pick a provider to see the strongest default model lane.</p>
               </div>
-              <div class="spotlight-badges" id="spotlight-badges"></div>
+              <div style="display:grid; gap:8px; justify-items:end;">
+                <div class="spotlight-badges" id="spotlight-badges"></div>
+                <button class="ghost" id="refresh-openrouter" type="button" hidden>Refresh Free Models</button>
+              </div>
             </div>
             <p id="spotlight-secondary">OpenRouter highlights currently free hosted choices. Ollama is biased toward smaller local coding models.</p>
           </div>
@@ -1142,6 +1145,7 @@
     const spotlightDescriptionEl = document.getElementById("spotlight-description");
     const spotlightSecondaryEl = document.getElementById("spotlight-secondary");
     const spotlightBadgesEl = document.getElementById("spotlight-badges");
+    const refreshOpenRouterButton = document.getElementById("refresh-openrouter");
 
     let metadata = null;
     let session = null;
@@ -1149,6 +1153,8 @@
     let isBusy = false;
     let activity = [];
     let streamingMessageEl = null;
+
+    const metadataHeartbeatMs = 60000;
 
     boot().catch((error) => {
       setStatus(error.message || String(error), true);
@@ -1203,6 +1209,7 @@
       promptEl.focus();
     });
     refreshSessionsButton.addEventListener("click", refreshSessions);
+    refreshOpenRouterButton.addEventListener("click", refreshOpenRouterModels);
 
     promptEl.addEventListener("keydown", (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -1220,38 +1227,62 @@
       });
     });
 
+    setInterval(() => {
+      void refreshMetadata(true);
+    }, metadataHeartbeatMs);
+
     async function boot() {
+      await refreshMetadata(false, true);
+      await refreshSessions();
+      setStatus("Ready. Start a session to begin.", false);
+      addActivity("Control room ready", `Default lane: ${getSelectedProviderMeta()?.label || "unknown"}.`, "info");
+    }
+
+    async function refreshMetadata(silent, initial = false) {
       const response = await fetch("/api/meta");
       const payload = await response.json();
       if (!response.ok || !payload.ok) {
         throw new Error(payload.error || "Failed to load GUI metadata.");
       }
 
+      const currentProvider = providerEl.value;
+      const currentCustomModel = modelEl.value.trim();
+      const shouldPreserveManualModel = modelEl.dataset.touched === "true";
+
       metadata = payload;
       providerEl.innerHTML = payload.providers
         .map((provider) => `<option value="${escapeAttribute(provider.value)}">${escapeHtml(provider.label)}</option>`)
         .join("");
 
-      const preferred = payload.providers.find((provider) => provider.value === "openrouter" && provider.status !== "missing-key")
+      const preferred = payload.providers.find((provider) => provider.value === currentProvider)
+        || payload.providers.find((provider) => provider.value === "openrouter" && provider.status !== "missing-key")
         || payload.providers.find((provider) => provider.status === "configured")
         || payload.providers.find((provider) => provider.value === "openrouter")
         || payload.providers[0];
 
       providerEl.value = preferred.value;
-      cwdEl.value = payload.defaultCwd;
-      modelEl.value = preferred.defaultModel;
-      modelEl.dataset.touched = "";
+      cwdEl.value = initial ? payload.defaultCwd : cwdEl.value;
+
       populateModelSelect(preferred);
-      modelSelectEl.value = preferred.defaultModel;
+
+      if (shouldPreserveManualModel && currentCustomModel) {
+        modelEl.value = currentCustomModel;
+        modelSelectEl.value = currentCustomModel;
+      } else {
+        modelEl.value = preferred.defaultModel;
+        modelEl.dataset.touched = "";
+        modelSelectEl.value = preferred.defaultModel;
+      }
 
       metricProviderCountEl.textContent = String(payload.providers.length);
       renderProviderHealth();
       renderProviderSetup();
       renderModelSpotlight();
       syncSignals();
-      await refreshSessions();
-      setStatus("Ready. Start a session to begin.", false);
-      addActivity("Control room ready", `Default lane: ${preferred.label}.`, "info");
+
+      if (!silent && preferred.value === "openrouter" && preferred.heartbeat?.refreshedAt) {
+        addActivity("OpenRouter heartbeat refreshed", preferred.detail, "info");
+      }
     }
 
     async function refreshSessions() {
@@ -1264,6 +1295,34 @@
       sessions = payload.sessions || [];
       metricSessionCountEl.textContent = String(sessions.length);
       renderSessionList();
+    }
+
+    async function refreshOpenRouterModels() {
+      setStatus("Refreshing OpenRouter free-model heartbeat...", false);
+      try {
+        const response = await fetch("/api/providers/openrouter/refresh", {
+          method: "POST",
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to refresh OpenRouter models.");
+        }
+
+        await refreshMetadata(true);
+        const openRouter = metadata?.providers?.find((provider) => provider.value === "openrouter");
+        if (providerEl.value === "openrouter" && modelEl.dataset.touched !== "true") {
+          modelEl.value = openRouter?.defaultModel || payload.preferredModel;
+          modelSelectEl.value = modelEl.value;
+          renderModelSpotlight();
+          syncSignals();
+        }
+
+        setStatus("OpenRouter free-model heartbeat refreshed.", false);
+        addActivity("OpenRouter heartbeat refreshed", `Preferred free model: ${payload.preferredModel}`, "success");
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        addActivity("OpenRouter refresh failed", error.message || String(error), "error");
+      }
     }
 
     async function startSession() {
@@ -1489,9 +1548,10 @@
       spotlightSecondaryEl.textContent = modelSpotlightSecondary(provider.value, currentOption?.value || currentValue);
 
       const badges = [];
+      refreshOpenRouterButton.hidden = provider.value !== "openrouter";
       if (provider.value === "openrouter") {
         badges.push({ label: "Hosted", tone: "recommended" });
-        badges.push({ label: "Free models highlighted", tone: "free" });
+        badges.push({ label: "Free heartbeat", tone: "free" });
       }
       if (provider.value === "ollama") {
         badges.push({ label: "Local", tone: "local" });
@@ -1747,10 +1807,15 @@
 
     function modelSpotlightSecondary(provider, modelValue) {
       if (provider === "openrouter") {
+        const selectedProvider = getSelectedProviderMeta();
+        const heartbeat = selectedProvider?.heartbeat;
+        const heartbeatLine = heartbeat?.refreshedAt
+          ? `Last live refresh ${relativeTime(heartbeat.refreshedAt)}.`
+          : "Waiting for the first live refresh.";
         if (modelValue === "openrouter/free" || String(modelValue || "").endsWith(":free")) {
-          return "This choice is meant to keep hosted usage on the currently free OpenRouter lane as of today.";
+          return `${heartbeatLine} This choice keeps hosted usage on the currently free OpenRouter lane and prefers the strongest available free option.`;
         }
-        return "OpenRouter options mix premium hosted models with currently free lanes. The picker surfaces the free ones first when available.";
+        return `${heartbeatLine} OpenRouter options mix premium hosted models with currently free lanes, and the picker ranks larger free coding-capable models like MiniMax, Nemotron, Qwen, or GPT-OSS higher when they are available.`;
       }
 
       if (provider === "ollama") {

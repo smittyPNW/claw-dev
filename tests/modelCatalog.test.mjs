@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { getGuiModelGroups } from "../dist/modelCatalog.js";
+import { getGuiModelGroups, getOpenRouterCatalogState } from "../dist/modelCatalog.js";
 
 test("getGuiModelGroups highlights current free OpenRouter models from live metadata", async () => {
   const originalFetch = globalThis.fetch;
@@ -49,10 +49,57 @@ test("getGuiModelGroups highlights current free OpenRouter models from live meta
       OPENROUTER_MODEL: "anthropic/claude-sonnet-4",
     });
 
-    const freeGroup = groups.find((group) => group.id === "free");
+    const freeGroup = groups.find((group) => group.id === "free-catalog");
     assert.ok(freeGroup);
     assert.ok(freeGroup.options.some((option) => option.value === "openai/gpt-oss-20b:free"));
     assert.ok(freeGroup.options.every((option) => option.badge === "Free now"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("getOpenRouterCatalogState prefers larger free flagship models when available", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        data: [
+          {
+            id: "openai/gpt-oss-20b:free",
+            name: "OpenAI: gpt-oss-20b (free)",
+            context_length: 131072,
+            pricing: { prompt: "0", completion: "0" },
+            supported_parameters: ["tools"],
+          },
+          {
+            id: "nvidia/nemotron-3-super-120b-a12b:free",
+            name: "NVIDIA: Nemotron 3 Super (free)",
+            context_length: 262144,
+            pricing: { prompt: "0", completion: "0" },
+            supported_parameters: ["tools"],
+          },
+          {
+            id: "minimax/minimax-m2.5:free",
+            name: "MiniMax: MiniMax M2.5 (free)",
+            context_length: 196608,
+            pricing: { prompt: "0", completion: "0" },
+            supported_parameters: ["tools"],
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+
+  try {
+    const state = await getOpenRouterCatalogState({}, { forceRefresh: true });
+    assert.equal(state.preferredModel.value, "minimax/minimax-m2.5:free");
+    const bestFree = state.groups.find((group) => group.id === "best-free");
+    assert.ok(bestFree);
+    assert.equal(bestFree.options[0].value, "minimax/minimax-m2.5:free");
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -14,11 +14,20 @@ export type GuiModelGroup = {
   options: GuiModelOption[];
 };
 
+export type OpenRouterCatalogState = {
+  groups: GuiModelGroup[];
+  preferredModel: GuiModelOption;
+  refreshedAt: string | null;
+  nextRefreshAt: string | null;
+  source: "live" | "fallback";
+};
+
 type OpenRouterModelResponse = {
   data?: Array<{
     id?: string;
     name?: string;
     description?: string;
+    context_length?: number;
     pricing?: {
       prompt?: string;
       completion?: string;
@@ -30,12 +39,13 @@ type OpenRouterModelResponse = {
 };
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
-const OPENROUTER_CACHE_TTL_MS = 1000 * 60 * 10;
+const OPENROUTER_HEARTBEAT_MS = Number(process.env.CLAW_OPENROUTER_HEARTBEAT_MS || "300000");
+const OPENROUTER_CACHE_TTL_MS = OPENROUTER_HEARTBEAT_MS;
 
 let openRouterCache:
   | {
       expiresAt: number;
-      groups: GuiModelGroup[];
+      state: OpenRouterCatalogState;
     }
   | undefined;
 
@@ -95,7 +105,7 @@ export async function getGuiModelGroups(
   }
 
   if (provider === "openrouter") {
-    return getOpenRouterModelGroups(env);
+    return (await getOpenRouterCatalogState(env)).groups;
   }
 
   if (provider === "ollama") {
@@ -105,13 +115,16 @@ export async function getGuiModelGroups(
   return [];
 }
 
-async function getOpenRouterModelGroups(env: NodeJS.ProcessEnv): Promise<GuiModelGroup[]> {
+export async function getOpenRouterCatalogState(
+  env: NodeJS.ProcessEnv = process.env,
+  options?: { forceRefresh?: boolean },
+): Promise<OpenRouterCatalogState> {
   const now = Date.now();
-  if (openRouterCache && openRouterCache.expiresAt > now) {
-    return openRouterCache.groups;
+  if (!options?.forceRefresh && openRouterCache && openRouterCache.expiresAt > now) {
+    return openRouterCache.state;
   }
 
-  const fallbackGroups = buildOpenRouterFallbackGroups(env);
+  const fallbackState = buildOpenRouterFallbackState(env, now);
 
   try {
     const response = await fetch(OPENROUTER_MODELS_URL, {
@@ -123,65 +136,101 @@ async function getOpenRouterModelGroups(env: NodeJS.ProcessEnv): Promise<GuiMode
     if (!response.ok) {
       openRouterCache = {
         expiresAt: now + OPENROUTER_CACHE_TTL_MS,
-        groups: fallbackGroups,
+        state: fallbackState,
       };
-      return fallbackGroups;
+      return fallbackState;
     }
 
     const payload = (await response.json()) as OpenRouterModelResponse;
-    const freeOptions = (payload.data ?? [])
+    const rankedFreeOptions = (payload.data ?? [])
       .filter((model) => isOpenRouterFreeModel(model) && isCodingFriendlyOpenRouterModel(model))
       .map((model) => ({
-        value: model.id?.trim() || "",
-        label: model.name?.trim() || model.id?.trim() || "",
-        description: summarizeOpenRouterDescription(model),
-        badge: "Free now",
-        emphasis: "free" as const,
+        option: {
+          value: model.id?.trim() || "",
+          label: model.name?.trim() || model.id?.trim() || "",
+          description: summarizeOpenRouterDescription(model),
+          badge: "Free now",
+          emphasis: "free" as const,
+        },
+        score: scoreOpenRouterModel(model),
       }))
-      .filter((option) => option.value.length > 0)
-      .sort((left, right) => left.label.localeCompare(right.label))
-      .slice(0, 14);
+      .filter((entry) => entry.option.value.length > 0)
+      .sort((left, right) => right.score - left.score || left.option.label.localeCompare(right.option.label));
 
-    const groups = [
-      {
-        id: "router",
-        label: "OpenRouter Routers",
-        options: [
-          {
-            value: "openrouter/free",
-            label: "Free Models Router",
-            description: "Automatically selects a currently free model on OpenRouter.",
-            badge: "Free now",
-            emphasis: "recommended" as const,
-          },
-        ],
-      },
-      {
-        id: "free",
-        label: "Current Free Coding-Friendly Models",
-        options: uniqueOptions([
-          ...freeOptions,
-          ...buildOpenRouterFallbackGroups(env).find((group) => group.id === "free")?.options ?? [],
-        ]),
-      },
-      ...buildOpenRouterFallbackGroups(env).filter((group) => group.id !== "free" && group.id !== "router"),
-    ].filter((group) => group.options.length > 0);
+    const bestFreeNow = uniqueOptions(rankedFreeOptions.map((entry) => entry.option)).slice(0, 10);
+    const freeCatalog = uniqueOptions([
+      ...bestFreeNow,
+      ...(buildOpenRouterFallbackState(env, now).groups.find((group) => group.id === "free-catalog")?.options ?? []),
+    ]).slice(0, 18);
+
+    const preferredModel = bestFreeNow[0] ?? {
+      value: "openrouter/free",
+      label: "Free Models Router",
+      description: "Automatically selects a currently free OpenRouter model.",
+      badge: "Free now",
+      emphasis: "recommended" as const,
+    };
+
+    const state: OpenRouterCatalogState = {
+      groups: [
+        {
+          id: "best-free",
+          label: "Best Free Right Now",
+          options: bestFreeNow.length > 0 ? bestFreeNow : [preferredModel],
+        },
+        {
+          id: "router",
+          label: "OpenRouter Routers",
+          options: [
+            {
+              value: "openrouter/free",
+              label: "Free Models Router",
+              description: "Automatically selects a currently free model on OpenRouter.",
+              badge: "Free router",
+              emphasis: "recommended" as const,
+            },
+          ],
+        },
+        {
+          id: "free-catalog",
+          label: "More Free Coding-Friendly Models",
+          options: freeCatalog,
+        },
+        ...buildOpenRouterFallbackState(env, now).groups.filter(
+          (group) => group.id !== "free-catalog" && group.id !== "router" && group.id !== "best-free",
+        ),
+      ].filter((group) => group.options.length > 0),
+      preferredModel,
+      refreshedAt: new Date(now).toISOString(),
+      nextRefreshAt: new Date(now + OPENROUTER_HEARTBEAT_MS).toISOString(),
+      source: "live",
+    };
 
     openRouterCache = {
       expiresAt: now + OPENROUTER_CACHE_TTL_MS,
-      groups,
+      state,
     };
-    return groups;
+    return state;
   } catch {
     openRouterCache = {
       expiresAt: now + OPENROUTER_CACHE_TTL_MS,
-      groups: fallbackGroups,
+      state: fallbackState,
     };
-    return fallbackGroups;
+    return fallbackState;
   }
 }
 
-function buildOpenRouterFallbackGroups(env: NodeJS.ProcessEnv): GuiModelGroup[] {
+export function startOpenRouterHeartbeat(env: NodeJS.ProcessEnv = process.env): void {
+  void getOpenRouterCatalogState(env, { forceRefresh: true });
+
+  const timer = setInterval(() => {
+    void getOpenRouterCatalogState(env, { forceRefresh: true });
+  }, OPENROUTER_HEARTBEAT_MS);
+
+  timer.unref();
+}
+
+function buildOpenRouterFallbackState(env: NodeJS.ProcessEnv, now: number): OpenRouterCatalogState {
   const catalog = providerModelCatalog("openrouter", env);
   const freeFallback = catalog
     .filter((model) => model === "openrouter/free" || model.endsWith(":free"))
@@ -203,31 +252,52 @@ function buildOpenRouterFallbackGroups(env: NodeJS.ProcessEnv): GuiModelGroup[] 
     option("openai/gpt-oss-120b", "gpt-oss-120b", "Open reasoning-heavy model on OpenRouter."),
   ].filter((item) => catalog.includes(item.value) || item.value === "anthropic/claude-sonnet-4");
 
-  return [
-    {
-      id: "router",
-      label: "OpenRouter Routers",
-      options: [
-        {
-          value: "openrouter/free",
-          label: "Free Models Router",
-          description: "Automatically selects a currently free model on OpenRouter.",
-          badge: "Free now",
-          emphasis: "recommended" as const,
-        },
-      ],
-    },
-    {
-      id: "free",
-      label: "Current Free Coding-Friendly Models",
-      options: freeFallback,
-    },
-    {
-      id: "featured",
-      label: "Featured Hosted Models",
-      options: featured,
-    },
-  ].filter((group) => group.options.length > 0);
+  const preferredModel =
+    freeFallback[0]
+    ?? {
+      value: "openrouter/free",
+      label: "Free Models Router",
+      description: "Automatically selects a currently free OpenRouter model.",
+      badge: "Free router",
+      emphasis: "recommended" as const,
+    };
+
+  return {
+    groups: [
+      {
+        id: "best-free",
+        label: "Best Free Right Now",
+        options: [preferredModel],
+      },
+      {
+        id: "router",
+        label: "OpenRouter Routers",
+        options: [
+          {
+            value: "openrouter/free",
+            label: "Free Models Router",
+            description: "Automatically selects a currently free model on OpenRouter.",
+            badge: "Free router",
+            emphasis: "recommended" as const,
+          },
+        ],
+      },
+      {
+        id: "free-catalog",
+        label: "More Free Coding-Friendly Models",
+        options: freeFallback,
+      },
+      {
+        id: "featured",
+        label: "Featured Hosted Models",
+        options: featured,
+      },
+    ].filter((group) => group.options.length > 0),
+    preferredModel,
+    refreshedAt: null,
+    nextRefreshAt: new Date(now + OPENROUTER_HEARTBEAT_MS).toISOString(),
+    source: "fallback",
+  };
 }
 
 function getOllamaModelGroups(): GuiModelGroup[] {
@@ -338,6 +408,9 @@ function isCodingFriendlyOpenRouterModel(model: NonNullable<OpenRouterModelRespo
     "mistral",
     "instruct",
     "reason",
+    "nemotron",
+    "minimax",
+    "hermes",
   ];
   const negativeSignals = ["lyria", "image", "vision-image", "speech", "music", "audio", "video"];
 
@@ -350,6 +423,60 @@ function isCodingFriendlyOpenRouterModel(model: NonNullable<OpenRouterModelRespo
   }
 
   return positiveSignals.some((signal) => text.includes(signal));
+}
+
+function scoreOpenRouterModel(model: NonNullable<OpenRouterModelResponse["data"]>[number]): number {
+  const text = `${model.id ?? ""} ${model.name ?? ""} ${model.description ?? ""}`.toLowerCase();
+  let score = 0;
+
+  if (model.supported_parameters?.includes("tools")) {
+    score += 40;
+  }
+
+  score += Math.min((model.context_length ?? 0) / 8192, 28);
+
+  if (text.includes("minimax")) {
+    score += 280;
+  }
+  if (text.includes("nemotron")) {
+    score += 135;
+  }
+  if (text.includes("qwen3-coder")) {
+    score += 145;
+  }
+  if (text.includes("qwen3.6")) {
+    score += 130;
+  }
+  if (text.includes("gpt-oss-120b")) {
+    score += 132;
+  }
+  if (text.includes("hermes") && text.includes("405b")) {
+    score += 128;
+  }
+  if (text.includes("llama") && text.includes("70b")) {
+    score += 110;
+  }
+
+  const sizeSignals = [
+    { pattern: /480b|405b/, bonus: 110 },
+    { pattern: /120b/, bonus: 90 },
+    { pattern: /80b/, bonus: 80 },
+    { pattern: /70b/, bonus: 72 },
+    { pattern: /30b/, bonus: 38 },
+    { pattern: /20b/, bonus: 24 },
+    { pattern: /12b/, bonus: 14 },
+    { pattern: /9b|4b|3b|2b|1\.5b/, bonus: -8 },
+    { pattern: /nano|mini/, bonus: -16 },
+  ];
+
+  for (const signal of sizeSignals) {
+    if (signal.pattern.test(text)) {
+      score += signal.bonus;
+      break;
+    }
+  }
+
+  return score;
 }
 
 function normalizePrice(value: string | undefined): number {

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { CodingAgent } from "./agent.js";
 import { loadConfig } from "./config.js";
-import { getGuiModelGroups } from "./modelCatalog.js";
+import { getGuiModelGroups, getOpenRouterCatalogState, startOpenRouterHeartbeat } from "./modelCatalog.js";
 import type { ProviderName } from "./providers.js";
 
 type SessionRecord = {
@@ -51,15 +51,16 @@ const indexPath = path.join(repoRoot, "index.html");
 const sessions = new Map<string, SessionRecord>();
 
 const GUI_PORT = Number(process.env.CLAW_GUI_PORT || "4310");
+startOpenRouterHeartbeat();
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
 
     if (req.method === "GET" && url.pathname === "/api/meta") {
-      const [anthropicModels, geminiModels, openRouterModels, ollamaModels] = await Promise.all([
+      const [anthropicModels, geminiModels, openRouterState, ollamaModels] = await Promise.all([
         getGuiModelGroups("anthropic"),
         getGuiModelGroups("gemini"),
-        getGuiModelGroups("openrouter"),
+        getOpenRouterCatalogState(),
         getGuiModelGroups("ollama"),
       ]);
 
@@ -86,10 +87,18 @@ const server = createServer(async (req, res) => {
           {
             value: "openrouter",
             label: "OpenRouter",
-            defaultModel: process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4",
+            defaultModel: resolveOpenRouterDefaultModel(openRouterState),
             status: process.env.OPENROUTER_API_KEY ? "configured" : "missing-key",
-            detail: process.env.OPENROUTER_API_KEY ? "API key available" : "Set OPENROUTER_API_KEY",
-            modelGroups: openRouterModels,
+            detail: process.env.OPENROUTER_API_KEY
+              ? formatOpenRouterDetail(openRouterState)
+              : `Set OPENROUTER_API_KEY. ${formatOpenRouterDetail(openRouterState)}`,
+            modelGroups: openRouterState.groups,
+            preferredModel: openRouterState.preferredModel.value,
+            heartbeat: {
+              refreshedAt: openRouterState.refreshedAt,
+              nextRefreshAt: openRouterState.nextRefreshAt,
+              source: openRouterState.source,
+            },
           },
           {
             value: "ollama",
@@ -100,6 +109,19 @@ const server = createServer(async (req, res) => {
             modelGroups: ollamaModels,
           },
         ],
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/providers/openrouter/refresh") {
+      const state = await getOpenRouterCatalogState(process.env, { forceRefresh: true });
+      return sendJson(res, 200, {
+        ok: true,
+        preferredModel: state.preferredModel.value,
+        heartbeat: {
+          refreshedAt: state.refreshedAt,
+          nextRefreshAt: state.nextRefreshAt,
+          source: state.source,
+        },
       });
     }
 
@@ -252,6 +274,39 @@ function summarizeSession(session: SessionRecord): SessionSummary {
     turns: session.turns,
     lastPrompt: session.lastPrompt,
   };
+}
+
+function resolveOpenRouterDefaultModel(state: Awaited<ReturnType<typeof getOpenRouterCatalogState>>): string {
+  const envModel = process.env.OPENROUTER_MODEL?.trim();
+  if (envModel && envModel !== "anthropic/claude-sonnet-4") {
+    return envModel;
+  }
+
+  return state.preferredModel.value;
+}
+
+function formatOpenRouterDetail(state: Awaited<ReturnType<typeof getOpenRouterCatalogState>>): string {
+  const sourceLabel = state.source === "live" ? "live heartbeat" : "fallback catalog";
+  const refreshedLabel = state.refreshedAt
+    ? `Refreshed ${relativeHeartbeatTime(state.refreshedAt)}`
+    : "Waiting for first live refresh";
+  return `${refreshedLabel} from ${sourceLabel}. Default free pick: ${state.preferredModel.label}.`;
+}
+
+function relativeHeartbeatTime(iso: string): string {
+  const deltaMs = Date.now() - new Date(iso).getTime();
+  const deltaMinutes = Math.max(0, Math.round(deltaMs / 60000));
+  if (deltaMinutes < 1) {
+    return "just now";
+  }
+  if (deltaMinutes < 60) {
+    return `${deltaMinutes}m ago`;
+  }
+  const deltaHours = Math.round(deltaMinutes / 60);
+  if (deltaHours < 24) {
+    return `${deltaHours}h ago`;
+  }
+  return `${Math.round(deltaHours / 24)}d ago`;
 }
 
 async function streamTurn(res: ServerResponse, session: SessionRecord, prompt: string): Promise<void> {

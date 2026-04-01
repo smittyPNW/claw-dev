@@ -1,4 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
+import { config as loadEnv } from "dotenv";
 
 import { CodingAgent } from "./agent.js";
 import { loadConfig, type AppConfig } from "./config.js";
@@ -11,6 +12,8 @@ import {
   splitTelegramMessage,
   type TelegramSessionSnapshot,
 } from "./telegramShared.js";
+
+loadEnv({ quiet: true });
 
 type TelegramUpdate = {
   update_id: number;

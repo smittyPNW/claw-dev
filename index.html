@@ -290,7 +290,8 @@
 
     .provider-item,
     .session-item,
-    .activity-item {
+    .activity-item,
+    .model-spotlight {
       border-radius: 18px;
       border: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.04);
@@ -400,6 +401,62 @@
       padding: 10px 12px;
       font-size: 12px;
       font-weight: 600;
+    }
+
+    .model-spotlight {
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .model-spotlight-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .model-spotlight h4 {
+      font-size: 14px;
+    }
+
+    .model-spotlight p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .spotlight-badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .spotlight-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .spotlight-badge.free {
+      color: var(--warning);
+    }
+
+    .spotlight-badge.recommended {
+      color: var(--success);
+    }
+
+    .spotlight-badge.local {
+      color: #9ec7ff;
     }
 
     .main {
@@ -888,7 +945,23 @@
           </label>
 
           <label>
-            Model
+            Suggested Model
+            <select id="model-select"></select>
+          </label>
+
+          <div class="model-spotlight" id="model-spotlight">
+            <div class="model-spotlight-head">
+              <div>
+                <h4 id="spotlight-title">Model guidance</h4>
+                <p id="spotlight-description">Pick a provider to see the strongest default model lane.</p>
+              </div>
+              <div class="spotlight-badges" id="spotlight-badges"></div>
+            </div>
+            <p id="spotlight-secondary">OpenRouter highlights currently free hosted choices. Ollama is biased toward smaller local coding models.</p>
+          </div>
+
+          <label>
+            Custom Model Override
             <input id="model" type="text" placeholder="anthropic/claude-sonnet-4">
           </label>
 
@@ -1039,6 +1112,7 @@
 
   <script>
     const providerEl = document.getElementById("provider");
+    const modelSelectEl = document.getElementById("model-select");
     const modelEl = document.getElementById("model");
     const cwdEl = document.getElementById("cwd");
     const startSessionButton = document.getElementById("start-session");
@@ -1064,6 +1138,10 @@
     const signalProviderEl = document.getElementById("signal-provider");
     const signalModelEl = document.getElementById("signal-model");
     const signalCwdEl = document.getElementById("signal-cwd");
+    const spotlightTitleEl = document.getElementById("spotlight-title");
+    const spotlightDescriptionEl = document.getElementById("spotlight-description");
+    const spotlightSecondaryEl = document.getElementById("spotlight-secondary");
+    const spotlightBadgesEl = document.getElementById("spotlight-badges");
 
     let metadata = null;
     let session = null;
@@ -1083,17 +1161,33 @@
       }
 
       const selected = getSelectedProviderMeta();
+      populateModelSelect(selected);
       if (selected && !modelEl.dataset.touched) {
         modelEl.value = selected.defaultModel;
+        modelSelectEl.value = selected.defaultModel;
       }
 
       renderProviderSetup();
+      renderModelSpotlight();
+      syncSignals();
+    });
+
+    modelSelectEl.addEventListener("change", () => {
+      if (modelSelectEl.value) {
+        modelEl.value = modelSelectEl.value;
+        modelEl.dataset.touched = "";
+      }
+      renderModelSpotlight();
       syncSignals();
     });
 
     modelEl.addEventListener("input", () => {
       modelEl.dataset.touched = "true";
+      if (modelSelectEl.value !== modelEl.value.trim()) {
+        modelSelectEl.value = "";
+      }
       renderProviderSetup();
+      renderModelSpotlight();
       syncSignals();
     });
 
@@ -1147,10 +1241,13 @@
       cwdEl.value = payload.defaultCwd;
       modelEl.value = preferred.defaultModel;
       modelEl.dataset.touched = "";
+      populateModelSelect(preferred);
+      modelSelectEl.value = preferred.defaultModel;
 
       metricProviderCountEl.textContent = String(payload.providers.length);
       renderProviderHealth();
       renderProviderSetup();
+      renderModelSpotlight();
       syncSignals();
       await refreshSessions();
       setStatus("Ready. Start a session to begin.", false);
@@ -1358,6 +1455,60 @@
       providerHealthSummaryEl.textContent = `${configuredCount}/${metadata.providers.length} ready`;
     }
 
+    function populateModelSelect(provider) {
+      const groups = provider?.modelGroups || [];
+      if (!groups.length) {
+        modelSelectEl.innerHTML = `<option value="">No suggestions available</option>`;
+        return;
+      }
+
+      modelSelectEl.innerHTML = [
+        `<option value="">Keep current custom model</option>`,
+        ...groups.map((group) => `
+          <optgroup label="${escapeAttribute(group.label)}">
+            ${group.options
+              .map((option) => `<option value="${escapeAttribute(option.value)}">${escapeHtml(buildModelOptionLabel(option))}</option>`)
+              .join("")}
+          </optgroup>
+        `),
+      ].join("");
+    }
+
+    function renderModelSpotlight() {
+      const provider = getSelectedProviderMeta();
+      if (!provider) {
+        return;
+      }
+
+      const groups = provider.modelGroups || [];
+      const currentValue = modelSelectEl.value || modelEl.value.trim() || provider.defaultModel;
+      const currentOption = findModelOption(groups, currentValue) || findModelOption(groups, provider.defaultModel);
+
+      spotlightTitleEl.textContent = currentOption?.label || provider.label;
+      spotlightDescriptionEl.textContent = currentOption?.description || provider.detail || "No additional model guidance available.";
+      spotlightSecondaryEl.textContent = modelSpotlightSecondary(provider.value, currentOption?.value || currentValue);
+
+      const badges = [];
+      if (provider.value === "openrouter") {
+        badges.push({ label: "Hosted", tone: "recommended" });
+        badges.push({ label: "Free models highlighted", tone: "free" });
+      }
+      if (provider.value === "ollama") {
+        badges.push({ label: "Local", tone: "local" });
+        badges.push({ label: "Coding-biased", tone: "recommended" });
+      }
+      if (currentOption?.badge) {
+        badges.unshift({
+          label: currentOption.badge,
+          tone: currentOption.emphasis === "free" ? "free" : currentOption.emphasis === "local" ? "local" : "recommended",
+        });
+      }
+
+      spotlightBadgesEl.innerHTML = badges
+        .map((badge) => `<span class="spotlight-badge ${escapeAttribute(badge.tone)}">${escapeHtml(badge.label)}</span>`)
+        .join("");
+    }
+
     function renderSessionList() {
       if (!sessions.length) {
         sessionListEl.innerHTML = `
@@ -1397,7 +1548,9 @@
 
           session = next;
           providerEl.value = next.provider;
+          populateModelSelect(getSelectedProviderMeta());
           modelEl.value = next.model;
+          modelSelectEl.value = next.model;
           cwdEl.value = next.cwd;
           modelEl.dataset.touched = "true";
           updateSessionBadge("live", `${next.provider} live`);
@@ -1406,6 +1559,7 @@
           metricTurnCountEl.textContent = String(next.turns || 0);
           syncSignals();
           renderProviderSetup();
+          renderModelSpotlight();
           renderSessionList();
           addActivity("Session resumed", `${next.provider} · ${next.model}`, "info");
           if (!transcriptEl.querySelector(".message")) {
@@ -1574,6 +1728,36 @@
         default:
           return status;
       }
+    }
+
+    function buildModelOptionLabel(option) {
+      return option.badge ? `${option.label} (${option.badge})` : option.label;
+    }
+
+    function findModelOption(groups, value) {
+      for (const group of groups || []) {
+        for (const option of group.options || []) {
+          if (option.value === value) {
+            return option;
+          }
+        }
+      }
+      return null;
+    }
+
+    function modelSpotlightSecondary(provider, modelValue) {
+      if (provider === "openrouter") {
+        if (modelValue === "openrouter/free" || String(modelValue || "").endsWith(":free")) {
+          return "This choice is meant to keep hosted usage on the currently free OpenRouter lane as of today.";
+        }
+        return "OpenRouter options mix premium hosted models with currently free lanes. The picker surfaces the free ones first when available.";
+      }
+
+      if (provider === "ollama") {
+        return "Ollama is intentionally biased toward smaller local coding models here so end users can get useful code help without workstation-class hardware.";
+      }
+
+      return "You can pick a suggested model or override it manually if you already know the exact id you want.";
     }
 
     function formatToolName(toolName) {

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { CodingAgent } from "./agent.js";
 import { loadConfig } from "./config.js";
+import { getGuiModelGroups } from "./modelCatalog.js";
 import type { ProviderName } from "./providers.js";
 
 type SessionRecord = {
@@ -55,6 +56,13 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
 
     if (req.method === "GET" && url.pathname === "/api/meta") {
+      const [anthropicModels, geminiModels, openRouterModels, ollamaModels] = await Promise.all([
+        getGuiModelGroups("anthropic"),
+        getGuiModelGroups("gemini"),
+        getGuiModelGroups("openrouter"),
+        getGuiModelGroups("ollama"),
+      ]);
+
       return sendJson(res, 200, {
         ok: true,
         defaultCwd: process.cwd(),
@@ -65,6 +73,7 @@ const server = createServer(async (req, res) => {
             defaultModel: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
             status: process.env.ANTHROPIC_API_KEY ? "configured" : "missing-key",
             detail: process.env.ANTHROPIC_API_KEY ? "API key available" : "Set ANTHROPIC_API_KEY",
+            modelGroups: anthropicModels,
           },
           {
             value: "gemini",
@@ -72,6 +81,7 @@ const server = createServer(async (req, res) => {
             defaultModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
             status: process.env.GEMINI_API_KEY ? "configured" : "missing-key",
             detail: process.env.GEMINI_API_KEY ? "API key available" : "Set GEMINI_API_KEY",
+            modelGroups: geminiModels,
           },
           {
             value: "openrouter",
@@ -79,6 +89,7 @@ const server = createServer(async (req, res) => {
             defaultModel: process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4",
             status: process.env.OPENROUTER_API_KEY ? "configured" : "missing-key",
             detail: process.env.OPENROUTER_API_KEY ? "API key available" : "Set OPENROUTER_API_KEY",
+            modelGroups: openRouterModels,
           },
           {
             value: "ollama",
@@ -86,6 +97,7 @@ const server = createServer(async (req, res) => {
             defaultModel: process.env.OLLAMA_MODEL || "qwen3",
             status: "local",
             detail: process.env.OLLAMA_BASE_URL || "Uses local Ollama runtime",
+            modelGroups: ollamaModels,
           },
         ],
       });

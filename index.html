@@ -596,6 +596,22 @@
       background: white;
     }
 
+    .message.assistant.streaming {
+      border-color: rgba(217, 114, 66, 0.18);
+      box-shadow: 0 20px 52px rgba(217, 114, 66, 0.12);
+    }
+
+    .message.assistant.streaming .message-body::after {
+      content: "";
+      display: inline-block;
+      width: 9px;
+      height: 1.1em;
+      margin-left: 4px;
+      vertical-align: -2px;
+      background: rgba(217, 114, 66, 0.72);
+      animation: caretBlink 1s steps(1) infinite;
+    }
+
     .message.system {
       justify-self: start;
       background: rgba(18, 22, 28, 0.06);
@@ -694,6 +710,22 @@
       border-color: rgba(18, 22, 28, 0.08);
     }
 
+    .activity-item.kind-success {
+      border-left: 3px solid rgba(111, 214, 165, 0.92);
+    }
+
+    .activity-item.kind-error {
+      border-left: 3px solid rgba(255, 141, 115, 0.9);
+    }
+
+    .activity-item.kind-tool {
+      border-left: 3px solid rgba(217, 114, 66, 0.92);
+    }
+
+    .activity-item.kind-info {
+      border-left: 3px solid rgba(96, 146, 255, 0.7);
+    }
+
     .activity-time {
       color: rgba(18, 22, 28, 0.48);
       font-size: 12px;
@@ -746,6 +778,15 @@
       to {
         opacity: 1;
         transform: translateY(0);
+      }
+    }
+
+    @keyframes caretBlink {
+      0%, 45% {
+        opacity: 1;
+      }
+      46%, 100% {
+        opacity: 0;
       }
     }
 
@@ -1029,6 +1070,7 @@
     let sessions = [];
     let isBusy = false;
     let activity = [];
+    let streamingMessageEl = null;
 
     boot().catch((error) => {
       setStatus(error.message || String(error), true);
@@ -1212,30 +1254,79 @@
       updateSessionBadge("busy", `${session.provider} working`);
       addActivity("Prompt sent", summarizePrompt(prompt), "info");
       focusCopyEl.textContent = "The agent is working through the current prompt. Keep an eye on the transcript and recent activity for the latest state.";
+      streamingMessageEl = createStreamingAssistantMessage();
 
       const startedAt = performance.now();
 
       try {
-        const response = await fetch(`/api/sessions/${session.id}/messages`, {
+        const response = await fetch(`/api/sessions/${session.id}/messages/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt }),
         });
 
-        const payload = await response.json();
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload.error || "Request failed.");
+        if (!response.ok || !response.body) {
+          let detail = "Request failed.";
+          try {
+            const payload = await response.json();
+            detail = payload.error || detail;
+          } catch {}
+          throw new Error(detail);
         }
 
-        appendMessage("assistant", payload.message || "(empty response)");
-        session = payload.session || session;
-        metricTurnCountEl.textContent = String(session.turns || 0);
+        let streamedText = "";
+
+        await readNdjsonStream(response.body, (event) => {
+          if (event.type === "status") {
+            setStatus(event.message || "Running...", false);
+            return;
+          }
+
+          if (event.type === "tool_start") {
+            addActivity(`${formatToolName(event.toolName)} started`, event.inputSummary || "Running tool", "tool");
+            setStatus(`Running ${formatToolName(event.toolName)}...`, false);
+            return;
+          }
+
+          if (event.type === "tool_result") {
+            addActivity(
+              `${formatToolName(event.toolName)} ${event.isError ? "failed" : "finished"}`,
+              event.contentPreview || (event.isError ? "Tool failed." : "Tool finished."),
+              event.isError ? "error" : "tool",
+            );
+            return;
+          }
+
+          if (event.type === "text_delta") {
+            streamedText += event.text || "";
+            updateStreamingAssistantMessage(streamingMessageEl, streamedText);
+            return;
+          }
+
+          if (event.type === "session") {
+            session = event.session || session;
+            metricTurnCountEl.textContent = String(session?.turns || 0);
+            syncSignals();
+            return;
+          }
+
+          if (event.type === "error") {
+            throw new Error(event.message || "Streaming request failed.");
+          }
+        });
+
+        finalizeStreamingAssistantMessage(streamingMessageEl, streamedText || "(empty response)");
+        streamingMessageEl = null;
         setStatus("Response complete.", false);
         updateSessionBadge("live", `${session.provider} live`);
         focusCopyEl.textContent = "Latest response complete. You can continue the thread, change the prompt direction, or reset the session for a fresh pass.";
-        addActivity("Response complete", `${Math.round(performance.now() - startedAt)} ms · ${session.turns || 0} turns in this lane`, "success");
+        addActivity("Response complete", `${Math.round(performance.now() - startedAt)} ms · ${session?.turns || 0} turns in this lane`, "success");
         await refreshSessions();
       } catch (error) {
+        if (streamingMessageEl) {
+          streamingMessageEl.remove();
+          streamingMessageEl = null;
+        }
         appendMessage("system", error.message || String(error));
         setStatus(error.message || String(error), true);
         updateSessionBadge("live", `${session.provider} live`);
@@ -1347,12 +1438,10 @@
 
       const article = document.createElement("article");
       article.className = `message ${role}`;
-      article.innerHTML = `
-        <span class="label">${escapeHtml(role)}</span>
-        <div class="message-body">${escapeHtml(text).replaceAll("\n", "<br>")}</div>
-      `;
+      article.innerHTML = createMessageMarkup(role, text);
       transcriptEl.appendChild(article);
       transcriptEl.scrollTop = transcriptEl.scrollHeight;
+      return article;
     }
 
     function resetTranscript(showEmpty) {
@@ -1426,7 +1515,7 @@
       activitySummaryEl.textContent = `${activity.length} recent events`;
       activityListEl.innerHTML = activity
         .map((item) => `
-          <li class="activity-item">
+          <li class="activity-item kind-${escapeAttribute(item.kind || "info")}">
             <div class="activity-row">
               <strong>${escapeHtml(item.title)}</strong>
               <span class="activity-time">${escapeHtml(relativeTime(item.at))}</span>
@@ -1484,6 +1573,73 @@
           return "local";
         default:
           return status;
+      }
+    }
+
+    function formatToolName(toolName) {
+      return String(toolName || "tool").replaceAll("_", " ");
+    }
+
+    function createMessageMarkup(role, text) {
+      return `
+        <span class="label">${escapeHtml(role)}</span>
+        <div class="message-body">${escapeHtml(text).replaceAll("\n", "<br>")}</div>
+      `;
+    }
+
+    function createStreamingAssistantMessage() {
+      const article = appendMessage("assistant", "Thinking through the request...");
+      article.classList.add("streaming");
+      return article;
+    }
+
+    function updateStreamingAssistantMessage(article, text) {
+      if (!article) {
+        return;
+      }
+
+      article.innerHTML = createMessageMarkup("assistant", text || "Thinking through the request...");
+      article.classList.add("streaming");
+      transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    }
+
+    function finalizeStreamingAssistantMessage(article, text) {
+      if (!article) {
+        return;
+      }
+
+      article.innerHTML = createMessageMarkup("assistant", text);
+      article.classList.remove("streaming");
+      transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    }
+
+    async function readNdjsonStream(stream, onEvent) {
+      const reader = stream.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            continue;
+          }
+          onEvent(JSON.parse(trimmed));
+        }
+      }
+
+      const remainder = buffer.trim();
+      if (remainder) {
+        onEvent(JSON.parse(remainder));
       }
     }
 

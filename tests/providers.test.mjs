@@ -153,6 +153,73 @@ test("OpenRouterProvider tolerates malformed tool-call arguments and still compl
   }
 });
 
+test("OpenRouterProvider emits lifecycle events for tool execution", async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "claw-dev-openrouter-events-"));
+  const originalFetch = globalThis.fetch;
+  const events = [];
+
+  await writeFile(join(workspace, "note.txt"), "event flow works", "utf8");
+
+  globalThis.fetch = async (_url, _init) =>
+    new Response(
+      JSON.stringify({
+        choices: events.some((event) => event.type === "tool_result")
+          ? [
+              {
+                message: {
+                  content: "done after tool event flow",
+                },
+              },
+            ]
+          : [
+              {
+                message: {
+                  content: "",
+                  tool_calls: [
+                    {
+                      id: "call-1",
+                      type: "function",
+                      function: {
+                        name: "read_file",
+                        arguments: JSON.stringify({ path: "note.txt" }),
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+
+  try {
+    const provider = new OpenRouterProvider({
+      apiKey: "or-test-key",
+      model: "anthropic/claude-sonnet-4",
+      cwd: workspace,
+      baseUrl: "https://openrouter.ai/api/v1",
+    });
+
+    const result = await provider.runTurn("read note", (event) => {
+      events.push(event);
+    });
+
+    assert.equal(result.text, "done after tool event flow");
+    assert.deepEqual(
+      events.map((event) => event.type),
+      ["status", "status", "status", "tool_start", "tool_result", "status", "status"],
+    );
+    assert.equal(events[3].toolName, "read_file");
+    assert.match(events[4].contentPreview, /event flow works/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("OllamaProvider normalizes base URL and can complete a tool loop", async () => {
   const workspace = await mkdtemp(join(tmpdir(), "claw-dev-ollama-"));
   const originalFetch = globalThis.fetch;

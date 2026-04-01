@@ -8,6 +8,28 @@ export type AgentTurnResult = {
   text: string;
 };
 
+export type TurnEvent =
+  | {
+      type: "status";
+      stage: "queued" | "requesting" | "tooling" | "complete";
+      message: string;
+    }
+  | {
+      type: "tool_start";
+      toolName: string;
+      callId: string;
+      inputSummary: string;
+    }
+  | {
+      type: "tool_result";
+      toolName: string;
+      callId: string;
+      isError: boolean;
+      contentPreview: string;
+    };
+
+export type TurnEventHandler = (event: TurnEvent) => void;
+
 export type ProviderName = "anthropic" | "gemini" | "openrouter" | "ollama";
 
 const SYSTEM_PROMPT = `
@@ -18,7 +40,7 @@ Assume the workspace root is the allowed boundary and do not request paths outsi
 `.trim();
 
 export interface LlmProvider {
-  runTurn(prompt: string): Promise<AgentTurnResult>;
+  runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult>;
   clear(): void;
 }
 
@@ -38,15 +60,25 @@ export class AnthropicProvider implements LlmProvider {
     this.messages.length = 0;
   }
 
-  async runTurn(prompt: string): Promise<AgentTurnResult> {
+  async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
     this.messages.push({
       role: "user",
       content: prompt,
+    });
+    emitTurnEvent(onEvent, {
+      type: "status",
+      stage: "queued",
+      message: "Prompt queued for Anthropic.",
     });
 
     let assistantText = "";
 
     for (let i = 0; i < 8; i += 1) {
+      emitTurnEvent(onEvent, {
+        type: "status",
+        stage: "requesting",
+        message: `Requesting Anthropic response${i > 0 ? ` (pass ${i + 1})` : ""}.`,
+      });
       const response = await this.client.messages.create({
         model: this.model,
         max_tokens: 2048,
@@ -67,13 +99,31 @@ export class AnthropicProvider implements LlmProvider {
 
       const toolUses = response.content.filter((block) => block.type === "tool_use");
       if (toolUses.length === 0) {
+        emitTurnEvent(onEvent, {
+          type: "status",
+          stage: "complete",
+          message: "Anthropic response complete.",
+        });
         return { text: assistantText };
       }
+
+      emitTurnEvent(onEvent, {
+        type: "status",
+        stage: "tooling",
+        message: `Running ${toolUses.length} tool${toolUses.length === 1 ? "" : "s"}.`,
+      });
 
       const toolResults: ToolResultBlockParam[] = [];
       for (const toolUse of toolUses) {
         const handler = toolHandlers[toolUse.name];
         if (!handler) {
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: toolUse.name,
+            callId: toolUse.id,
+            isError: true,
+            contentPreview: `Unknown tool: ${toolUse.name}`,
+          });
           toolResults.push({
             type: "tool_result",
             tool_use_id: toolUse.id,
@@ -84,7 +134,20 @@ export class AnthropicProvider implements LlmProvider {
         }
 
         try {
+          emitTurnEvent(onEvent, {
+            type: "tool_start",
+            toolName: toolUse.name,
+            callId: toolUse.id,
+            inputSummary: summarizeToolInput(toolUse.input as Record<string, unknown>),
+          });
           const result = await handler(toolUse.input as Record<string, unknown>, this.cwd);
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: toolUse.name,
+            callId: toolUse.id,
+            isError: result.isError ?? false,
+            contentPreview: summarizeToolContent(result.content),
+          });
           const toolResult: ToolResultBlockParam = {
             type: "tool_result",
             tool_use_id: toolUse.id,
@@ -100,6 +163,13 @@ export class AnthropicProvider implements LlmProvider {
             tool_use_id: toolUse.id,
             is_error: true,
             content: error instanceof Error ? error.message : String(error),
+          });
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: toolUse.name,
+            callId: toolUse.id,
+            isError: true,
+            contentPreview: summarizeToolContent(error instanceof Error ? error.message : String(error)),
           });
         }
       }
@@ -137,15 +207,25 @@ export class GeminiProvider implements LlmProvider {
     this.contents.length = 0;
   }
 
-  async runTurn(prompt: string): Promise<AgentTurnResult> {
+  async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
     this.contents.push({
       role: "user",
       parts: [{ text: prompt }],
+    });
+    emitTurnEvent(onEvent, {
+      type: "status",
+      stage: "queued",
+      message: "Prompt queued for Gemini.",
     });
 
     let assistantText = "";
 
     for (let i = 0; i < 8; i += 1) {
+      emitTurnEvent(onEvent, {
+        type: "status",
+        stage: "requesting",
+        message: `Requesting Gemini response${i > 0 ? ` (pass ${i + 1})` : ""}.`,
+      });
       const response = await this.client.models.generateContent({
         model: this.model,
         contents: this.contents,
@@ -187,8 +267,19 @@ export class GeminiProvider implements LlmProvider {
         .filter((call): call is { id?: string; name?: string; args?: unknown } => typeof call === "object" && call !== null);
 
       if (functionCalls.length === 0) {
+        emitTurnEvent(onEvent, {
+          type: "status",
+          stage: "complete",
+          message: "Gemini response complete.",
+        });
         return { text: assistantText || response.text || "" };
       }
+
+      emitTurnEvent(onEvent, {
+        type: "status",
+        stage: "tooling",
+        message: `Running ${functionCalls.length} tool${functionCalls.length === 1 ? "" : "s"}.`,
+      });
 
       const functionResponses: Array<Record<string, unknown>> = [];
 
@@ -198,6 +289,13 @@ export class GeminiProvider implements LlmProvider {
         const handler = toolHandlers[name];
 
         if (!handler) {
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: name,
+            callId,
+            isError: true,
+            contentPreview: `Unknown tool: ${name}`,
+          });
           functionResponses.push({
             functionResponse: {
               name,
@@ -212,7 +310,20 @@ export class GeminiProvider implements LlmProvider {
 
         try {
           const input = isRecord(functionCall.args) ? functionCall.args : {};
+          emitTurnEvent(onEvent, {
+            type: "tool_start",
+            toolName: name,
+            callId,
+            inputSummary: summarizeToolInput(input),
+          });
           const result = await handler(input, this.cwd);
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: name,
+            callId,
+            isError: result.isError ?? false,
+            contentPreview: summarizeToolContent(result.content),
+          });
           functionResponses.push({
             functionResponse: {
               name,
@@ -224,6 +335,13 @@ export class GeminiProvider implements LlmProvider {
             },
           });
         } catch (error) {
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: name,
+            callId,
+            isError: true,
+            contentPreview: summarizeToolContent(error instanceof Error ? error.message : String(error)),
+          });
           functionResponses.push({
             functionResponse: {
               name,
@@ -299,15 +417,25 @@ class OpenAICompatibleProvider implements LlmProvider {
     this.messages.length = 0;
   }
 
-  async runTurn(prompt: string): Promise<AgentTurnResult> {
+  async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
     this.messages.push({
       role: "user",
       content: prompt,
+    });
+    emitTurnEvent(onEvent, {
+      type: "status",
+      stage: "queued",
+      message: "Prompt queued for provider.",
     });
 
     let assistantText = "";
 
     for (let i = 0; i < 8; i += 1) {
+      emitTurnEvent(onEvent, {
+        type: "status",
+        stage: "requesting",
+        message: `Requesting provider response${i > 0 ? ` (pass ${i + 1})` : ""}.`,
+      });
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
@@ -363,8 +491,19 @@ class OpenAICompatibleProvider implements LlmProvider {
       });
 
       if (toolCalls.length === 0) {
+        emitTurnEvent(onEvent, {
+          type: "status",
+          stage: "complete",
+          message: "Provider response complete.",
+        });
         return { text: assistantText };
       }
+
+      emitTurnEvent(onEvent, {
+        type: "status",
+        stage: "tooling",
+        message: `Running ${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"}.`,
+      });
 
       for (const [index, call] of toolCalls.entries()) {
         const name = call.function?.name?.trim() || "";
@@ -372,6 +511,13 @@ class OpenAICompatibleProvider implements LlmProvider {
         const handler = toolHandlers[name];
 
         if (!handler) {
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: name,
+            callId,
+            isError: true,
+            contentPreview: `Unknown tool: ${name}`,
+          });
           this.messages.push({
             role: "tool",
             tool_call_id: callId,
@@ -383,13 +529,33 @@ class OpenAICompatibleProvider implements LlmProvider {
         try {
           const rawArgs = call.function?.arguments ?? "{}";
           const input = parseJsonRecord(rawArgs);
+          emitTurnEvent(onEvent, {
+            type: "tool_start",
+            toolName: name,
+            callId,
+            inputSummary: summarizeToolInput(input),
+          });
           const result = await handler(input, this.cwd);
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: name,
+            callId,
+            isError: result.isError ?? false,
+            contentPreview: summarizeToolContent(result.content),
+          });
           this.messages.push({
             role: "tool",
             tool_call_id: callId,
             content: result.content,
           });
         } catch (error) {
+          emitTurnEvent(onEvent, {
+            type: "tool_result",
+            toolName: name,
+            callId,
+            isError: true,
+            contentPreview: summarizeToolContent(error instanceof Error ? error.message : String(error)),
+          });
           this.messages.push({
             role: "tool",
             tool_call_id: callId,
@@ -477,4 +643,49 @@ function formatOpenAICompatibleProviderError(
   return detail
     ? `Provider request failed with status ${status}: ${detail}`
     : `Provider request failed with status ${status}.`;
+}
+
+function emitTurnEvent(onEvent: TurnEventHandler | undefined, event: TurnEvent): void {
+  onEvent?.(event);
+}
+
+function summarizeToolInput(input: Record<string, unknown>): string {
+  const entries = Object.entries(input);
+  if (entries.length === 0) {
+    return "No arguments";
+  }
+
+  return entries
+    .slice(0, 3)
+    .map(([key, value]) => `${key}: ${summarizeUnknown(value)}`)
+    .join(" · ");
+}
+
+function summarizeToolContent(content: string): string {
+  const compact = content.replace(/\s+/g, " ").trim();
+  if (!compact) {
+    return "(no output)";
+  }
+  return compact.length > 160 ? `${compact.slice(0, 157)}...` : compact;
+}
+
+function summarizeUnknown(value: unknown): string {
+  if (typeof value === "string") {
+    const compact = value.replace(/\s+/g, " ").trim();
+    return compact.length > 60 ? `${compact.slice(0, 57)}...` : compact;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.length === 0 ? "[]" : `[${value.length} items]`;
+  }
+
+  if (isRecord(value)) {
+    return "{...}";
+  }
+
+  return String(value);
 }

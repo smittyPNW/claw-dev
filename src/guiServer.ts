@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -130,6 +131,18 @@ const server = createServer(async (req, res) => {
       });
     }
 
+    if (req.method === "POST" && url.pathname.startsWith("/api/sessions/") && url.pathname.endsWith("/messages/stream")) {
+      const sessionId = decodeURIComponent(url.pathname.split("/")[3] ?? "");
+      const session = requireSession(sessionId);
+      const body = (await readJson(req)) as SessionMessageRequest;
+      const prompt = body.prompt?.trim();
+      if (!prompt) {
+        throw httpError(400, "Prompt is required.");
+      }
+
+      return streamTurn(res, session, prompt);
+    }
+
     if (req.method === "POST" && url.pathname.startsWith("/api/sessions/") && url.pathname.endsWith("/reset")) {
       const sessionId = decodeURIComponent(url.pathname.split("/")[3] ?? "");
       const session = requireSession(sessionId);
@@ -227,6 +240,69 @@ function summarizeSession(session: SessionRecord): SessionSummary {
     turns: session.turns,
     lastPrompt: session.lastPrompt,
   };
+}
+
+async function streamTurn(res: ServerResponse, session: SessionRecord, prompt: string): Promise<void> {
+  res.writeHead(200, {
+    "Content-Type": "application/x-ndjson; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+
+  const send = (event: Record<string, unknown>): void => {
+    res.write(`${JSON.stringify(event)}\n`);
+  };
+
+  try {
+    const result = await session.agent.runTurn(prompt, (event) => {
+      send(event);
+    });
+
+    session.turns += 1;
+    session.lastPrompt = prompt;
+    session.updatedAt = new Date().toISOString();
+
+    await streamText(send, result.text || "(empty response)");
+    send({
+      type: "session",
+      session: summarizeSession(session),
+    });
+    send({
+      type: "done",
+    });
+  } catch (error) {
+    send({
+      type: "error",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    res.end();
+  }
+}
+
+async function streamText(send: (event: Record<string, unknown>) => void, text: string): Promise<void> {
+  for (const chunk of chunkText(text)) {
+    send({
+      type: "text_delta",
+      text: chunk,
+    });
+    await delay(18);
+  }
+}
+
+function chunkText(text: string): string[] {
+  const chunks: string[] = [];
+  let index = 0;
+
+  while (index < text.length) {
+    const remaining = text.slice(index);
+    const breakpoint = remaining.match(/^.{1,72}(?:\s|$)/)?.[0].length ?? Math.min(72, remaining.length);
+    chunks.push(text.slice(index, index + breakpoint));
+    index += breakpoint;
+  }
+
+  return chunks.length > 0 ? chunks : [text];
 }
 
 async function readJson(req: IncomingMessage): Promise<unknown> {

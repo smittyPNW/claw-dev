@@ -5,6 +5,7 @@ import {
   OpenRouterProvider,
   type LlmProvider,
   type ProviderName,
+  type TurnEventHandler,
 } from "./providers.js";
 
 export type AgentTurnResult = {
@@ -71,7 +72,7 @@ export class CodingAgent {
     this.provider.clear();
   }
 
-  async runTurn(prompt: string): Promise<AgentTurnResult> {
-    return this.provider.runTurn(prompt);
+  async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
+    return this.provider.runTurn(prompt, onEvent);
   }
 }

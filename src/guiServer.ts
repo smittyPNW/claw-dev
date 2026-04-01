@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { CodingAgent } from "./agent.js";
 import { loadConfig } from "./config.js";
 import { getOpenAIAuthPanelState } from "./guiAuth.js";
+import { getUpdateCheckState, installAvailableUpdate } from "./guiUpdate.js";
 import { getGuiModelGroups, getOpenRouterCatalogState, startOpenRouterHeartbeat } from "./modelCatalog.js";
 import type { ProviderName } from "./providers.js";
 
@@ -128,6 +129,27 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, {
         ok: true,
         auth: getOpenAIAuthPanelState({ env: process.env }),
+      });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/update/status") {
+      return sendJson(res, 200, {
+        ok: true,
+        update: await getUpdateCheckState({ cwd: repoRoot }),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/update/check") {
+      return sendJson(res, 200, {
+        ok: true,
+        update: await getUpdateCheckState({ cwd: repoRoot, forceRefresh: true }),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/update/install") {
+      return sendJson(res, 200, {
+        ok: true,
+        result: await installAvailableUpdate({ cwd: repoRoot }),
       });
     }
 

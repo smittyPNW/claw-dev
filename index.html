@@ -348,6 +348,26 @@
       color: var(--warning);
     }
 
+    .status-up-to-date,
+    .status-configured {
+      color: var(--success);
+    }
+
+    .status-update-available {
+      color: var(--accent-strong);
+    }
+
+    .status-dirty,
+    .status-diverged,
+    .status-error {
+      color: var(--danger);
+    }
+
+    .status-ahead,
+    .status-checking {
+      color: #9ec7ff;
+    }
+
     .status-local {
       color: #9ec7ff;
     }
@@ -427,6 +447,17 @@
         radial-gradient(circle at top right, rgba(217, 114, 66, 0.16), transparent 44%);
     }
 
+    .update-panel {
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03)),
+        radial-gradient(circle at top right, rgba(96, 146, 255, 0.14), transparent 46%);
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
     .auth-panel-head {
       display: flex;
       align-items: start;
@@ -447,6 +478,25 @@
     .auth-detail,
     .auth-support {
       margin: 0;
+    }
+
+    .update-summary {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .update-command {
+      margin: 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.88);
+      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+      font-size: 12px;
+      overflow-wrap: anywhere;
     }
 
     .auth-command {
@@ -1068,6 +1118,32 @@
 
         <section class="section">
           <div class="section-head">
+            <h3>Software Updates</h3>
+            <button class="ghost" id="refresh-updates" type="button">Check Now</button>
+          </div>
+          <div class="update-panel" id="update-panel">
+            <div class="auth-panel-head">
+              <div>
+                <h4 id="update-title">Checking GitHub for updates...</h4>
+                <p class="update-summary" id="update-detail">The GUI will keep an eye on the GitHub remote and offer a fast-forward install when a safe update is available.</p>
+              </div>
+              <span class="status-pill" id="update-status">Loading</span>
+            </div>
+            <div class="auth-meta">
+              <span class="chip"><strong>Branch</strong>&nbsp;<span id="update-branch">Waiting</span></span>
+              <span class="chip"><strong>Current</strong>&nbsp;<span id="update-current-version">Unknown</span></span>
+              <span class="chip"><strong>Remote</strong>&nbsp;<span id="update-remote-version">Unknown</span></span>
+            </div>
+            <p class="auth-support" id="update-next-action">Waiting for the first GitHub update check.</p>
+            <p class="update-command" id="update-repo">origin</p>
+            <div class="button-row">
+              <button class="primary" id="install-update" type="button" disabled>Install Update</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
             <h3>Recent Sessions</h3>
             <button class="ghost" id="refresh-sessions" type="button">Refresh</button>
           </div>
@@ -1233,6 +1309,17 @@
     const openAIAuthNextActionEl = document.getElementById("openai-auth-next-action");
     const openAIAuthCommandEl = document.getElementById("openai-auth-command");
     const copyOpenAICommandButton = document.getElementById("copy-openai-command");
+    const refreshUpdatesButton = document.getElementById("refresh-updates");
+    const installUpdateButton = document.getElementById("install-update");
+    const updatePanelEl = document.getElementById("update-panel");
+    const updateTitleEl = document.getElementById("update-title");
+    const updateDetailEl = document.getElementById("update-detail");
+    const updateStatusEl = document.getElementById("update-status");
+    const updateBranchEl = document.getElementById("update-branch");
+    const updateCurrentVersionEl = document.getElementById("update-current-version");
+    const updateRemoteVersionEl = document.getElementById("update-remote-version");
+    const updateNextActionEl = document.getElementById("update-next-action");
+    const updateRepoEl = document.getElementById("update-repo");
 
     let metadata = null;
     let session = null;
@@ -1241,8 +1328,11 @@
     let activity = [];
     let streamingMessageEl = null;
     let openAIAuthState = null;
+    let updateState = null;
+    let isInstallingUpdate = false;
 
     const metadataHeartbeatMs = 60000;
+    const updateHeartbeatMs = 300000;
 
     boot().catch((error) => {
       setStatus(error.message || String(error), true);
@@ -1300,6 +1390,8 @@
     refreshOpenRouterButton.addEventListener("click", refreshOpenRouterModels);
     refreshOpenAIAuthButton.addEventListener("click", refreshOpenAIAuthStatus);
     copyOpenAICommandButton.addEventListener("click", copyOpenAICommand);
+    refreshUpdatesButton.addEventListener("click", () => refreshUpdateStatus(false, true));
+    installUpdateButton.addEventListener("click", installUpdate);
 
     promptEl.addEventListener("keydown", (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -1321,9 +1413,14 @@
       void refreshMetadata(true);
     }, metadataHeartbeatMs);
 
+    setInterval(() => {
+      void refreshUpdateStatus(true, true);
+    }, updateHeartbeatMs);
+
     async function boot() {
       await refreshMetadata(false, true);
       await refreshOpenAIAuthStatus(true);
+      await refreshUpdateStatus(true, false);
       await refreshSessions();
       setStatus("Ready. Start a session to begin.", false);
       addActivity("Control room ready", `Default lane: ${getSelectedProviderMeta()?.label || "unknown"}.`, "info");
@@ -1440,6 +1537,68 @@
           setStatus(error.message || String(error), true);
           addActivity("ChatGPT auth check failed", error.message || String(error), "error");
         }
+      }
+    }
+
+    async function refreshUpdateStatus(silent = false, force = false) {
+      try {
+        const response = await fetch(force ? "/api/update/check" : "/api/update/status", {
+          method: force ? "POST" : "GET",
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to load updater status.");
+        }
+
+        updateState = payload.update;
+        renderUpdatePanel();
+
+        if (!silent) {
+          setStatus("GitHub update status refreshed.", false);
+          addActivity(
+            "Update status checked",
+            updateState.detail,
+            updateState.status === "update-available" ? "info" : updateState.status === "up-to-date" ? "success" : "info",
+          );
+        }
+      } catch (error) {
+        updateState = null;
+        renderUpdatePanel(error.message || String(error));
+        if (!silent) {
+          setStatus(error.message || String(error), true);
+          addActivity("Update check failed", error.message || String(error), "error");
+        }
+      }
+    }
+
+    async function installUpdate() {
+      if (!updateState?.canInstall || isInstallingUpdate) {
+        return;
+      }
+
+      isInstallingUpdate = true;
+      renderUpdatePanel();
+      setStatus("Installing update from GitHub...", false);
+
+      try {
+        const response = await fetch("/api/update/install", {
+          method: "POST",
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to install update.");
+        }
+
+        const result = payload.result;
+        setStatus(result.detail, false);
+        addActivity("Update installed", `${shortSha(result.beforeSha)} -> ${shortSha(result.afterSha)}`, "success");
+        await refreshUpdateStatus(true, true);
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        addActivity("Update install failed", error.message || String(error), "error");
+      } finally {
+        isInstallingUpdate = false;
+        renderUpdatePanel();
       }
     }
 
@@ -1662,6 +1821,51 @@
       openAIAuthCommandEl.textContent = openAIAuthState.actionCommand;
       copyOpenAICommandButton.textContent = openAIAuthState.actionLabel;
       openAIAuthPanelEl.dataset.status = openAIAuthState.status;
+    }
+
+    function renderUpdatePanel(errorMessage = "") {
+      if (!updateState) {
+        updateTitleEl.textContent = errorMessage ? "Updater unavailable" : "Checking GitHub for updates...";
+        updateDetailEl.textContent = errorMessage || "The GUI will keep an eye on the GitHub remote and offer a fast-forward install when a safe update is available.";
+        updateStatusEl.textContent = errorMessage ? "Unavailable" : "Loading";
+        updateStatusEl.className = "status-pill status-error";
+        updateBranchEl.textContent = "Unknown";
+        updateCurrentVersionEl.textContent = "Unknown";
+        updateRemoteVersionEl.textContent = "Unknown";
+        updateNextActionEl.textContent = errorMessage ? "Try checking again after confirming this workspace can reach GitHub." : "Waiting for the first GitHub update check.";
+        updateRepoEl.textContent = "origin";
+        installUpdateButton.disabled = true;
+        installUpdateButton.textContent = "Install Update";
+        updatePanelEl.dataset.status = "error";
+        return;
+      }
+
+      updateTitleEl.textContent = updateState.status === "update-available"
+        ? "A newer GitHub version is ready."
+        : updateState.status === "up-to-date"
+          ? "This workspace is current."
+          : updateState.status === "dirty"
+            ? "Local changes are blocking auto-update."
+            : updateState.status === "ahead"
+              ? "This workspace is ahead of GitHub."
+              : updateState.status === "diverged"
+                ? "Local and remote history diverged."
+                : updateState.status === "detached"
+                  ? "Branch tracking is unavailable."
+                  : "Updater needs attention.";
+      updateDetailEl.textContent = updateState.detail;
+      updateStatusEl.textContent = formatProviderStatus(updateState.status);
+      updateStatusEl.className = `status-pill status-${updateState.status}`;
+      updateBranchEl.textContent = updateState.branch || "Unknown";
+      updateCurrentVersionEl.textContent = updateState.currentVersion || shortSha(updateState.currentSha) || "Unknown";
+      updateRemoteVersionEl.textContent = updateState.remoteVersion || shortSha(updateState.remoteSha) || "Unknown";
+      updateNextActionEl.textContent = updateState.nextAction;
+      updateRepoEl.textContent = updateState.repoLabel
+        ? `${updateState.repoLabel} · ${shortSha(updateState.currentSha)} -> ${shortSha(updateState.remoteSha)}`
+        : "origin";
+      installUpdateButton.disabled = !updateState.canInstall || isInstallingUpdate;
+      installUpdateButton.textContent = isInstallingUpdate ? "Installing..." : "Install Update";
+      updatePanelEl.dataset.status = updateState.status;
     }
 
     function populateModelSelect(provider) {
@@ -1923,6 +2127,10 @@
       return `${pathValue.slice(0, 14)}...${pathValue.slice(-16)}`;
     }
 
+    function shortSha(value) {
+      return value ? String(value).slice(0, 7) : "";
+    }
+
     function relativeTime(iso) {
       const deltaMs = Date.now() - new Date(iso).getTime();
       const deltaMinutes = Math.round(deltaMs / 60000);
@@ -1944,12 +2152,28 @@
       switch (status) {
         case "configured":
           return "ready";
+        case "up-to-date":
+          return "current";
+        case "update-available":
+          return "update ready";
         case "missing-auth":
           return "needs auth";
         case "missing-key":
           return "needs key";
         case "expired":
           return "expired";
+        case "dirty":
+          return "repo dirty";
+        case "ahead":
+          return "ahead";
+        case "diverged":
+          return "diverged";
+        case "detached":
+          return "detached";
+        case "checking":
+          return "checking";
+        case "error":
+          return "error";
         case "local":
           return "local";
         default:

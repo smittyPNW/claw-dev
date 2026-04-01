@@ -25,6 +25,19 @@ test("loadConfig supports openrouter in the top-level app path", () => {
   assert.equal(config.baseUrl, "https://openrouter.ai/api/v1");
 });
 
+test("loadConfig gives a direct OpenRouter setup hint when the key is missing", () => {
+  process.env = {
+    ...ORIGINAL_ENV,
+    LLM_PROVIDER: "openrouter",
+    OPENROUTER_API_KEY: "",
+  };
+
+  assert.throws(
+    () => loadConfig(),
+    /OpenRouter mode requires OPENROUTER_API_KEY/i,
+  );
+});
+
 test("loadConfig supports ollama in the top-level app path", () => {
   process.env = {
     ...ORIGINAL_ENV,

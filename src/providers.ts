@@ -330,12 +330,7 @@ class OpenAICompatibleProvider implements LlmProvider {
 
       const json = (await response.json()) as OpenAICompatibleResponse;
       if (!response.ok) {
-        const detail = json.error?.message?.trim();
-        throw new Error(
-          detail
-            ? `Provider request failed with status ${response.status}: ${detail}`
-            : `Provider request failed with status ${response.status}.`,
-        );
+        throw new Error(formatOpenAICompatibleProviderError(this.baseUrl, this.model, response.status, json));
       }
 
       const message = json.choices?.[0]?.message;
@@ -457,4 +452,29 @@ function parseJsonRecord(value: string): Record<string, unknown> {
 function normalizeOllamaBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/$/, "");
   return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
+}
+
+function formatOpenAICompatibleProviderError(
+  baseUrl: string,
+  model: string,
+  status: number,
+  response: OpenAICompatibleResponse,
+): string {
+  const detail = response.error?.message?.trim();
+  const normalizedBaseUrl = baseUrl.toLowerCase();
+  const isOllama = normalizedBaseUrl.includes("127.0.0.1:11434") || normalizedBaseUrl.includes("localhost:11434");
+
+  if (isOllama) {
+    if (status === 404 && detail) {
+      return `Ollama request failed: ${detail}. Make sure Ollama is running, the base URL is correct, and the model "${model}" is pulled locally.`;
+    }
+
+    return detail
+      ? `Ollama request failed with status ${status}: ${detail}`
+      : `Ollama request failed with status ${status}. Check that Ollama is running and reachable at ${baseUrl}.`;
+  }
+
+  return detail
+    ? `Provider request failed with status ${status}: ${detail}`
+    : `Provider request failed with status ${status}.`;
 }

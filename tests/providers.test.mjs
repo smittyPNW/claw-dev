@@ -123,3 +123,35 @@ test("OllamaProvider normalizes base URL and can complete a tool loop", async ()
     await rm(workspace, { recursive: true, force: true });
   }
 });
+
+test("OllamaProvider returns actionable setup guidance for missing models", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        error: {
+          message: "model 'qwen3' not found",
+        },
+      }),
+      {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+
+  try {
+    const provider = new OllamaProvider({
+      model: "qwen3",
+      cwd: process.cwd(),
+      baseUrl: "http://127.0.0.1:11434",
+    });
+
+    await assert.rejects(
+      () => provider.runTurn("hello"),
+      /Make sure Ollama is running.*model "qwen3" is pulled locally/i,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

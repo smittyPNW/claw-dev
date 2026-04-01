@@ -49,7 +49,9 @@ export function loadConfig(overrides?: Partial<Pick<AppConfig, "provider" | "mod
   if (provider === "openrouter") {
     const apiKey = parsed.data.OPENROUTER_API_KEY?.trim();
     if (!apiKey) {
-      throw new Error("OPENROUTER_API_KEY is required when LLM_PROVIDER=openrouter");
+      throw new Error(
+        "OpenRouter mode requires OPENROUTER_API_KEY. Set it in your environment or .env file and try again.",
+      );
     }
     return {
       provider,

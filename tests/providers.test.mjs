@@ -47,6 +47,112 @@ test("OpenRouterProvider sends requests to the configured base URL with auth", a
   }
 });
 
+test("OpenRouterProvider surfaces HTTP error details", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        error: {
+          message: "rate limit exceeded",
+        },
+      }),
+      {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+
+  try {
+    const provider = new OpenRouterProvider({
+      apiKey: "or-test-key",
+      model: "anthropic/claude-sonnet-4",
+      cwd: process.cwd(),
+      baseUrl: "https://openrouter.ai/api/v1",
+    });
+
+    await assert.rejects(
+      () => provider.runTurn("hello"),
+      /Provider request failed with status 429: rate limit exceeded/i,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("OpenRouterProvider tolerates malformed tool-call arguments and still completes", async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "claw-dev-openrouter-"));
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init });
+
+    if (calls.length === 1) {
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: "",
+                tool_calls: [
+                  {
+                    id: "call-1",
+                    type: "function",
+                    function: {
+                      name: "list_files",
+                      arguments: "{not-valid-json",
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: "recovered after malformed tool args",
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  };
+
+  try {
+    const provider = new OpenRouterProvider({
+      apiKey: "or-test-key",
+      model: "anthropic/claude-sonnet-4",
+      cwd: workspace,
+      baseUrl: "https://openrouter.ai/api/v1",
+    });
+
+    const result = await provider.runTurn("list files");
+    assert.equal(result.text, "recovered after malformed tool args");
+
+    const secondBody = JSON.parse(calls[1].init.body);
+    assert.equal(secondBody.messages.at(-1).role, "tool");
+    assert.match(secondBody.messages.at(-1).content, /\(empty directory\)|dir |file /);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("OllamaProvider normalizes base URL and can complete a tool loop", async () => {
   const workspace = await mkdtemp(join(tmpdir(), "claw-dev-ollama-"));
   const originalFetch = globalThis.fetch;

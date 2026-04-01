@@ -24,6 +24,13 @@ Claw Dev is designed to feel like one tool rather than a provider-specific wrapp
 - `package.json`
   - root scripts for launching, building, and validating the workspace
 
+## Capability Matrix
+
+| Path | Command | Best for | Providers | Notes |
+|---|---|---|---|---|
+| Full launcher | `npm run claw-dev` | main interactive product flow | Anthropic, OpenAI, Gemini, Groq, OpenRouter, Copilot, z.ai, Ollama | richest UX, bundled client, provider chooser, local compatibility proxy |
+| Direct TS app | `npm run dev -- ...` | development, testing, lighter local loop | Anthropic, Gemini, OpenRouter, Ollama | simpler CLI and REPL, easier to iterate on, fewer product features than the bundled launcher |
+
 ## Supported Providers
 
 ### Anthropic

@@ -18,7 +18,29 @@ type ChatEntry = {
 };
 
 function titleForProvider(provider: ProviderName): string {
-  return provider === "gemini" ? "Gemini Code" : "Claude Style Code";
+  switch (provider) {
+    case "gemini":
+      return "Claw Dev for Gemini";
+    case "openrouter":
+      return "Claw Dev for OpenRouter";
+    case "ollama":
+      return "Claw Dev for Ollama";
+    default:
+      return "Claw Dev for Anthropic";
+  }
+}
+
+function subtitleForProvider(provider: ProviderName): string {
+  switch (provider) {
+    case "openrouter":
+      return "Hosted multi-model routing with local tool execution";
+    case "ollama":
+      return "Local model runtime with local tool execution";
+    case "gemini":
+      return "Google Gemini-backed coding loop";
+    default:
+      return "Anthropic-backed coding loop";
+  }
 }
 
 function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions }) {
@@ -43,10 +65,11 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
 
   const sidebarLines = useMemo(
     () => [
-      "Tips",
-      "Type naturally to chat with the agent.",
-      "Use /tools to see local tool access.",
-      "Use /clear to reset the conversation.",
+      "Workflow",
+      "Ask naturally to inspect, search, and edit the workspace.",
+      "Use /tools to inspect the available local capabilities.",
+      "Use /clear to reset the conversation state.",
+      "Use /status to reprint the current backend details.",
       "Use /exit or Esc to quit.",
     ],
     [],
@@ -83,7 +106,19 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
           { role: "user", text: line },
           {
             role: "system",
-            text: "/help, /tools, /clear, /exit",
+            text: ["/help", "/tools", "/status", "/clear", "/exit"].join("\n"),
+          },
+        ]);
+        return;
+      }
+
+      if (line === "/status") {
+        setEntries((current) => [
+          ...current,
+          { role: "user", text: line },
+          {
+            role: "system",
+            text: `Provider: ${options.provider}\nModel: ${options.model}\nCWD: ${options.cwd}`,
           },
         ]);
         return;
@@ -131,15 +166,16 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text color="gray" italic>
-        Esc to cancel
+        Esc or Ctrl+C to exit
       </Text>
       <Box marginTop={1} borderStyle="round" borderColor="#d97757" flexDirection="column" paddingX={1} paddingY={1}>
         <Text color="#ff9c73">
           {titleForProvider(options.provider)} v0.2
         </Text>
+        <Text color="gray">{subtitleForProvider(options.provider)}</Text>
         <Box marginTop={1}>
           <Box width="50%" flexDirection="column" paddingRight={2}>
-            <Text bold>Welcome back!</Text>
+            <Text bold>Session Ready</Text>
             <Text>
               Backend: {options.provider} · Model: {options.model}
             </Text>
@@ -156,7 +192,7 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
         </Box>
       </Box>
       <Box marginTop={1}>
-        <Text color="gray">Interactive coding session with local tools.</Text>
+        <Text color="gray">Interactive coding session with local tools. Use /help for commands.</Text>
       </Box>
       <Box flexDirection="column" marginTop={1}>
         {entries.slice(-10).map((entry, index) => (
@@ -177,6 +213,9 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
       <Box borderStyle="single" borderColor="gray" paddingX={1}>
         <Text color="gray">{"> "}</Text>
         <TextInput value={input} onChange={setInput} onSubmit={submit} />
+      </Box>
+      <Box marginTop={1}>
+        <Text color="gray">Commands: /help /tools /status /clear /exit</Text>
       </Box>
     </Box>
   );

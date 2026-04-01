@@ -5,6 +5,10 @@ import { loadConfig } from "../dist/config.js";
 
 const ORIGINAL_ENV = process.env;
 
+test.afterEach(() => {
+  process.env = ORIGINAL_ENV;
+});
+
 test("loadConfig supports openrouter in the top-level app path", () => {
   process.env = {
     ...ORIGINAL_ENV,

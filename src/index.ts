@@ -21,7 +21,8 @@ function printHelp(): void {
   process.stdout.write(`Usage:\n`);
   process.stdout.write(`  npm run dev\n`);
   process.stdout.write(`  npm run dev -- "summarize this project"\n`);
-  process.stdout.write(`  npm run dev -- --provider gemini --cwd E:\\\\repo --model gemini-2.5-flash\n\n`);
+  process.stdout.write(`  npm run dev -- --provider openrouter --model anthropic/claude-sonnet-4 "review this repo"\n`);
+  process.stdout.write(`  npm run dev -- --provider ollama --model qwen3 --cwd E:\\\\repo "inspect this project"\n\n`);
   process.stdout.write(`Flags:\n`);
   process.stdout.write(`  --help   Show this help text\n`);
   process.stdout.write(`  --tools  List available local tools\n`);

@@ -4864,7 +4864,13 @@
         || lowerContent.includes("import arcade")
         || lowerContent.includes("import pyxel")
         || lowerContent.includes("pygame.init(")
+        || lowerContent.includes("display.set_mode(")
+        || lowerContent.includes("screen = turtle.screen(")
         || lowerContent.includes("tk()")
+        || lowerContent.includes("mainloop(")
+        || lowerContent.includes("arcade.window")
+        || lowerContent.includes("pyxel.init(")
+        || (lowerPath.endsWith(".py") && /(snake|pacman|invader|space|pong|tetris|breakout|asteroid|game)/.test(lowerPath))
       ) {
         return "external";
       }

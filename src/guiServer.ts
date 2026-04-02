@@ -1226,8 +1226,7 @@ async function startWorkspaceProcess(cwd: string, command: string, launchMode: "
 }
 
 async function inferWorkspaceRunMode(cwd: string, command: string): Promise<"command" | "external-window"> {
-  const match = command.match(/(?:python3?|node|npx\s+tsx)\s+"?([^"\n]+)"?/i);
-  const candidatePath = match?.[1]?.trim();
+  const candidatePath = extractRunnableScriptPath(command);
   if (!candidatePath) {
     return "command";
   }
@@ -1246,6 +1245,14 @@ async function inferWorkspaceRunMode(cwd: string, command: string): Promise<"com
       || lower.includes("import pyglet")
       || lower.includes("import arcade")
       || lower.includes("import pyxel")
+      || lower.includes("pygame.init(")
+      || lower.includes("display.set_mode(")
+      || lower.includes("turtle.screen(")
+      || lower.includes("screen = turtle.screen(")
+      || lower.includes("tk()")
+      || lower.includes("mainloop(")
+      || lower.includes("arcade.window")
+      || lower.includes("pyxel.init(")
     ) {
       return "external-window";
     }
@@ -1254,6 +1261,33 @@ async function inferWorkspaceRunMode(cwd: string, command: string): Promise<"com
   }
 
   return "command";
+}
+
+function extractRunnableScriptPath(command: string): string | null {
+  const trimmed = command.trim();
+
+  const pythonMatch = trimmed.match(/^(?:"[^"]*python[^"]*"|'[^']*python[^']*'|\S*python\S*|\S*python3\S*)\s+(".*?"|'.*?'|\S+)/i);
+  if (pythonMatch?.[1]) {
+    return stripShellQuotes(pythonMatch[1]);
+  }
+
+  const nodeMatch = trimmed.match(/^(?:node|npx\s+tsx)\s+(".*?"|'.*?'|\S+)/i);
+  if (nodeMatch?.[1]) {
+    return stripShellQuotes(nodeMatch[1]);
+  }
+
+  return null;
+}
+
+function stripShellQuotes(value: string): string {
+  if (
+    (value.startsWith("\"") && value.endsWith("\""))
+    || (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+
+  return value;
 }
 
 function trimProcessLog(content: string): string {

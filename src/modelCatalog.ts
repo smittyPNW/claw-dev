@@ -77,7 +77,7 @@ export async function getGuiModelGroups(
           },
           {
             value: "claude-sonnet-4-20250514",
-            label: "Claude Sonnet 4",
+            label: "Anthropic Sonnet 4",
             description: "General coding and repo analysis default.",
           },
         ],
@@ -280,7 +280,7 @@ function buildOpenRouterFallbackState(env: NodeJS.ProcessEnv, now: number): Open
     }));
 
   const featured = [
-    option("anthropic/claude-sonnet-4", "Claude Sonnet 4", "Strong general coding and repo analysis."),
+    option("anthropic/claude-sonnet-4", "Anthropic Sonnet 4", "Strong general coding and repo analysis."),
     option("google/gemini-2.5-flash", "Gemini 2.5 Flash", "Fast interactive coding and review loops."),
     option("google/gemini-2.5-pro", "Gemini 2.5 Pro", "Heavier reasoning for larger code tasks."),
     option("openai/gpt-oss-120b", "gpt-oss-120b", "Open reasoning-heavy model on OpenRouter."),

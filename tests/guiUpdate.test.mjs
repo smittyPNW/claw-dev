@@ -9,7 +9,7 @@ test("getUpdateCheckState reports a fast-forward update from GitHub", async () =
   const exec = async (_file, args) => {
     const key = args.join(" ");
     const outputs = {
-      "remote get-url origin": "https://github.com/smittyPNW/claw-cleanroom.git\n",
+      "remote get-url origin": "https://github.com/smittyPNW/claw-dev.git\n",
       "branch --show-current": "main\n",
       "rev-parse HEAD": "1111111\n",
       "status --porcelain": "",
@@ -46,7 +46,7 @@ test("getUpdateCheckState blocks install when the repo is dirty", async () => {
   const exec = async (_file, args) => {
     const key = args.join(" ");
     const outputs = {
-      "remote get-url origin": "https://github.com/smittyPNW/claw-cleanroom.git\n",
+      "remote get-url origin": "https://github.com/smittyPNW/claw-dev.git\n",
       "branch --show-current": "main\n",
       "rev-parse HEAD": "1111111\n",
       "status --porcelain": " M index.html\n",
@@ -82,7 +82,7 @@ test("installAvailableUpdate fast-forwards and refreshes dependencies when packa
   const exec = async (file, args) => {
     const key = `${file} ${args.join(" ")}`;
 
-    if (key === "git remote get-url origin") return { stdout: "https://github.com/smittyPNW/claw-cleanroom.git\n", stderr: "" };
+    if (key === "git remote get-url origin") return { stdout: "https://github.com/smittyPNW/claw-dev.git\n", stderr: "" };
     if (key === "git branch --show-current") return { stdout: "main\n", stderr: "" };
     if (key === "git rev-parse HEAD") return { stdout: `${head}\n`, stderr: "" };
     if (key === "git status --porcelain") return { stdout: "", stderr: "" };

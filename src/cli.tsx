@@ -198,7 +198,7 @@ function App({ agent, options }: { agent: CodingAgent; options: StartReplOptions
       setLastToolNote("Waiting on model response.");
 
       try {
-        const result = await agent.runTurn(line, (event) => {
+        const result = await agent.runTurn(line, [], (event: TurnEvent) => {
           handleTurnEvent(event, setLiveStatus, setLastToolNote);
         });
         setEntries((current) => [

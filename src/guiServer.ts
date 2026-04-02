@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { CodingAgent } from "./agent.js";
+import { normalizeChatAttachments } from "./chatAttachments.js";
 import { loadConfig } from "./config.js";
 import { getOpenAIAuthPanelState } from "./guiAuth.js";
 import { getOllamaRuntimeState, saveOllamaRuntimeConfig } from "./guiOllama.js";
@@ -39,6 +40,7 @@ type SessionCreateRequest = {
 
 type SessionMessageRequest = {
   prompt?: string;
+  attachments?: unknown[];
 };
 
 type PickFolderRequest = {
@@ -551,7 +553,8 @@ const server = createServer(async (req, res) => {
       if (!prompt) {
         throw httpError(400, "Prompt is required.");
       }
-      const result = await session.agent.runTurn(prompt);
+      const attachments = normalizeChatAttachments(body.attachments);
+      const result = await session.agent.runTurn(prompt, attachments);
       session.turns += 1;
       session.lastPrompt = prompt;
       session.updatedAt = new Date().toISOString();
@@ -571,7 +574,8 @@ const server = createServer(async (req, res) => {
         throw httpError(400, "Prompt is required.");
       }
 
-      return streamTurn(res, session, prompt);
+      const attachments = normalizeChatAttachments(body.attachments);
+      return streamTurn(res, session, prompt, attachments);
     }
 
     if (req.method === "POST" && url.pathname.startsWith("/api/sessions/") && url.pathname.endsWith("/reset")) {
@@ -754,7 +758,12 @@ function decodeProviderFromPath(pathname: string): KeyBackedProvider {
   return provider;
 }
 
-async function streamTurn(res: ServerResponse, session: SessionRecord, prompt: string): Promise<void> {
+async function streamTurn(
+  res: ServerResponse,
+  session: SessionRecord,
+  prompt: string,
+  attachments: ReturnType<typeof normalizeChatAttachments>,
+): Promise<void> {
   res.writeHead(200, {
     "Content-Type": "application/x-ndjson; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
@@ -767,7 +776,7 @@ async function streamTurn(res: ServerResponse, session: SessionRecord, prompt: s
   };
 
   try {
-    const result = await session.agent.runTurn(prompt, (event) => {
+    const result = await session.agent.runTurn(prompt, attachments, (event) => {
       send(event);
     });
 

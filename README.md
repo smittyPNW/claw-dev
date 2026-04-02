@@ -208,8 +208,9 @@ npm test
   - shared auth and provider helpers
 - `tests/`
   - regression and integration-oriented tests
-- `Leonxlnx-claude-code/`
+- `bundled launcher directory`
   - the original bundled launcher and terminal client that the newer surfaces build on
+  - on disk this currently lives at `Leonxlnx-claude-code/`
 - `index.html`
   - browser GUI shell and frontend logic
 

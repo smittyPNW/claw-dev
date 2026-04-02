@@ -27,7 +27,7 @@ const defaultPorts = {
 };
 
 const providerMenuOptions = [
-  ["1", "anthropic", "Anthropic", "Best overall Claude-style compatibility", "ANTHROPIC_API_KEY"],
+  ["1", "anthropic", "Anthropic", "Best overall Anthropic compatibility", "ANTHROPIC_API_KEY"],
   ["2", "openai", "OpenAI", "Strong general cloud option with custom model ids", "OPENAI_API_KEY or reusable Codex login"],
   ["3", "gemini", "Gemini", "Good balance of cost, speed, and long-context cloud models", "GEMINI_API_KEY"],
   ["4", "groq", "Groq", "Very fast hosted inference with open model choices", "GROQ_API_KEY"],

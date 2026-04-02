@@ -89,24 +89,24 @@ async function summarizeWorkspace(cwd: string): Promise<string[]> {
 
 async function detectProjectMarkers(cwd: string): Promise<string[]> {
   const candidates = [
-    "package.json",
-    "pyproject.toml",
-    "requirements.txt",
-    "Cargo.toml",
-    "go.mod",
-    "README.md",
-    "tests",
-    "src",
-    ".claude",
-    "Leonxlnx-claude-code",
+    { path: "package.json", label: "package.json" },
+    { path: "pyproject.toml", label: "pyproject.toml" },
+    { path: "requirements.txt", label: "requirements.txt" },
+    { path: "Cargo.toml", label: "Cargo.toml" },
+    { path: "go.mod", label: "go.mod" },
+    { path: "README.md", label: "README.md" },
+    { path: "tests", label: "tests/" },
+    { path: "src", label: "src/" },
+    { path: ".claude", label: "agent config" },
+    { path: "Leonxlnx-claude-code", label: "bundled launcher" },
   ];
 
   const found: string[] = [];
 
   for (const candidate of candidates) {
     try {
-      await fs.stat(path.join(cwd, candidate));
-      found.push(candidate);
+      await fs.stat(path.join(cwd, candidate.path));
+      found.push(candidate.label);
     } catch {
       continue;
     }

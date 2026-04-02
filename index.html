@@ -2019,6 +2019,107 @@
         0 0 0 1px rgba(255, 255, 255, 0.02);
     }
 
+    .composer-tools {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .composer-tools .helper {
+      margin: 0;
+    }
+
+    .attachment-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .attachment-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      max-width: 100%;
+      padding: 9px 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.028)),
+        radial-gradient(circle at top left, rgba(97, 216, 214, 0.1), transparent 52%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .attachment-thumb {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      object-fit: cover;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .attachment-meta {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .attachment-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(247, 243, 236, 0.94);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+
+    .attachment-detail {
+      font-size: 11px;
+      color: rgba(222, 229, 239, 0.58);
+    }
+
+    .attachment-remove {
+      min-width: auto;
+      padding: 7px 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(239, 244, 252, 0.84);
+    }
+
+    .message-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .message-attachment {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      min-width: 140px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .message-attachment img {
+      width: 100%;
+      max-width: 180px;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
     .composer-actions {
       display: flex;
       align-items: center;
@@ -2900,6 +3001,16 @@
                 <textarea id="prompt" placeholder="Inspect this repository and tell me where the OpenRouter flow is implemented."></textarea>
               </label>
 
+              <div class="composer-tools">
+                <div class="button-row">
+                  <button class="ghost" id="attach-files" type="button">Add File or Photo</button>
+                  <input id="chat-attachments" type="file" multiple hidden>
+                </div>
+                <p class="helper">Attach images for visual analysis or text/code files to give the model more context.</p>
+              </div>
+
+              <ul class="attachment-list" id="composer-attachments" hidden></ul>
+
               <div class="composer-actions">
                 <div class="composer-send-group">
                   <button class="primary" id="send-message" disabled>Send Prompt</button>
@@ -3099,6 +3210,9 @@
     const resetSessionButton = document.getElementById("reset-session");
     const sendMessageButton = document.getElementById("send-message");
     const clearComposerButton = document.getElementById("clear-composer");
+    const attachFilesButton = document.getElementById("attach-files");
+    const chatAttachmentsInputEl = document.getElementById("chat-attachments");
+    const composerAttachmentsEl = document.getElementById("composer-attachments");
     const refreshSessionsButton = document.getElementById("refresh-sessions");
     const promptEl = document.getElementById("prompt");
     const transcriptEl = document.getElementById("transcript");
@@ -3252,6 +3366,7 @@
     let workspaceTerminalCwd = "";
     let workspacePreviewUrl = "";
     let workspacePreviewObjectUrl = null;
+    let pendingChatAttachments = [];
     const collapsedWorkspaceDirs = new Set();
 
     const metadataHeartbeatMs = 60000;
@@ -3328,8 +3443,15 @@
     startSessionButton.addEventListener("click", startSession);
     resetSessionButton.addEventListener("click", resetSession);
     sendMessageButton.addEventListener("click", sendPrompt);
+    attachFilesButton.addEventListener("click", () => {
+      chatAttachmentsInputEl.click();
+    });
+    chatAttachmentsInputEl.addEventListener("change", () => {
+      void handleAttachmentSelection(chatAttachmentsInputEl.files);
+    });
     clearComposerButton.addEventListener("click", () => {
       promptEl.value = "";
+      clearPendingChatAttachments();
       promptEl.focus();
     });
     refreshSessionsButton.addEventListener("click", refreshSessions);
@@ -3956,16 +4078,19 @@
       }
 
       const prompt = promptEl.value.trim();
-      if (!prompt) {
+      if (!prompt && pendingChatAttachments.length === 0) {
         setStatus("Prompt cannot be empty.", true);
         return;
       }
 
-      appendMessage("user", prompt);
+      const promptText = prompt || "Process the attached files and images.";
+      const attachments = [...pendingChatAttachments];
+      appendMessage("user", promptText, attachments);
       promptEl.value = "";
+      clearPendingChatAttachments();
       setBusy(true, "Running prompt...");
       updateSessionBadge("busy", `${session.provider} working`);
-      addActivity("Prompt sent", summarizePrompt(prompt), "info");
+      addActivity("Prompt sent", summarizePrompt(promptText), "info");
       focusCopyEl.textContent = "The agent is working on the current prompt. Watch the transcript and activity feed for updates.";
       streamingMessageEl = createStreamingAssistantMessage();
       latestWrittenWorkspaceFile = null;
@@ -3976,7 +4101,7 @@
         const response = await fetch(`/api/sessions/${session.id}/messages/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt }),
+          body: JSON.stringify({ prompt: promptText, attachments }),
         });
 
         if (!response.ok || !response.body) {
@@ -5286,12 +5411,12 @@
       signalCwdEl.textContent = compactPath(cwdEl.value.trim() || "Waiting");
     }
 
-    function appendMessage(role, text) {
+    function appendMessage(role, text, attachments = []) {
       emptyStateEl.style.display = "none";
 
       const article = document.createElement("article");
       article.className = `message ${role}`;
-      article.innerHTML = createMessageMarkup(role, text);
+      article.innerHTML = createMessageMarkup(role, text, attachments);
       transcriptEl.appendChild(article);
       transcriptEl.scrollTop = transcriptEl.scrollHeight;
       return article;
@@ -5830,10 +5955,11 @@
       article.appendChild(actionRow);
     }
 
-    function createMessageMarkup(role, text) {
+    function createMessageMarkup(role, text, attachments = []) {
       return `
         <span class="label">${escapeHtml(role)}</span>
         <div class="message-body">${renderMessageBody(text)}</div>
+        ${renderMessageAttachments(attachments)}
       `;
     }
 
@@ -5904,6 +6030,144 @@
       if (remainder) {
         onEvent(JSON.parse(remainder));
       }
+    }
+
+    async function handleAttachmentSelection(fileList) {
+      const files = Array.from(fileList || []);
+      if (!files.length) {
+        return;
+      }
+
+      const nextAttachments = [];
+      for (const file of files.slice(0, 6)) {
+        try {
+          nextAttachments.push(await fileToAttachmentPayload(file));
+        } catch (error) {
+          setStatus(error.message || String(error), true);
+          addActivity("Attachment rejected", error.message || String(error), "error");
+        }
+      }
+
+      if (nextAttachments.length > 0) {
+        pendingChatAttachments = [...pendingChatAttachments, ...nextAttachments].slice(0, 6);
+        renderComposerAttachments();
+        setStatus(`${nextAttachments.length} attachment${nextAttachments.length === 1 ? "" : "s"} ready for the next prompt.`, false);
+      }
+
+      chatAttachmentsInputEl.value = "";
+    }
+
+    function clearPendingChatAttachments() {
+      pendingChatAttachments = [];
+      renderComposerAttachments();
+    }
+
+    function renderComposerAttachments() {
+      if (!pendingChatAttachments.length) {
+        composerAttachmentsEl.hidden = true;
+        composerAttachmentsEl.innerHTML = "";
+        return;
+      }
+
+      composerAttachmentsEl.hidden = false;
+      composerAttachmentsEl.innerHTML = pendingChatAttachments
+        .map((attachment, index) => `
+          <li class="attachment-chip">
+            ${attachment.previewUrl ? `<img class="attachment-thumb" src="${escapeAttribute(attachment.previewUrl)}" alt="${escapeAttribute(attachment.name)}">` : ""}
+            <div class="attachment-meta">
+              <span class="attachment-name">${escapeHtml(attachment.name)}</span>
+              <span class="attachment-detail">${escapeHtml(attachment.kindLabel)} · ${escapeHtml(formatBytes(attachment.size))}</span>
+            </div>
+            <button class="attachment-remove" type="button" data-attachment-index="${index}">Remove</button>
+          </li>
+        `)
+        .join("");
+
+      composerAttachmentsEl.querySelectorAll("[data-attachment-index]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const index = Number(button.dataset.attachmentIndex);
+          if (Number.isNaN(index)) {
+            return;
+          }
+          pendingChatAttachments = pendingChatAttachments.filter((_attachment, itemIndex) => itemIndex !== index);
+          renderComposerAttachments();
+        });
+      });
+    }
+
+    function renderMessageAttachments(attachments = []) {
+      if (!attachments.length) {
+        return "";
+      }
+
+      const markup = attachments
+        .map((attachment) => `
+          <div class="message-attachment">
+            ${attachment.previewUrl ? `<img src="${escapeAttribute(attachment.previewUrl)}" alt="${escapeAttribute(attachment.name)}">` : ""}
+            <strong>${escapeHtml(attachment.name)}</strong>
+            <span class="helper">${escapeHtml(attachment.kindLabel)} · ${escapeHtml(formatBytes(attachment.size))}</span>
+          </div>
+        `)
+        .join("");
+
+      return `<div class="message-attachments">${markup}</div>`;
+    }
+
+    async function fileToAttachmentPayload(file) {
+      const maxBytes = 4 * 1024 * 1024;
+      if (file.size > maxBytes) {
+        throw new Error(`${file.name} is too large. Keep uploads under 4 MB each for now.`);
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let index = 0; index < bytes.length; index += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+      }
+      const dataBase64 = btoa(binary);
+      const mimeType = file.type || inferAttachmentMimeType(file.name);
+      const isImage = mimeType.startsWith("image/");
+
+      return {
+        name: file.name || "attachment",
+        mimeType,
+        dataBase64,
+        size: file.size,
+        previewUrl: isImage ? URL.createObjectURL(file) : "",
+        kindLabel: isImage ? "Image" : isTextLikeAttachment(mimeType, file.name) ? "File" : "Binary",
+      };
+    }
+
+    function inferAttachmentMimeType(fileName) {
+      const lower = String(fileName || "").toLowerCase();
+      if (lower.endsWith(".png")) return "image/png";
+      if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+      if (lower.endsWith(".gif")) return "image/gif";
+      if (lower.endsWith(".webp")) return "image/webp";
+      if (lower.endsWith(".svg")) return "image/svg+xml";
+      if (lower.endsWith(".json")) return "application/json";
+      if (lower.endsWith(".md")) return "text/markdown";
+      if (lower.endsWith(".txt")) return "text/plain";
+      return "application/octet-stream";
+    }
+
+    function isTextLikeAttachment(mimeType, fileName) {
+      return mimeType.startsWith("text/")
+        || mimeType === "application/json"
+        || /\.(js|mjs|cjs|ts|tsx|jsx|py|md|txt|json|yaml|yml|html|css|csv|sh|sql)$/i.test(String(fileName || ""));
+    }
+
+    function formatBytes(value) {
+      const size = Number(value || 0);
+      if (size < 1024) {
+        return `${size} B`;
+      }
+      if (size < 1024 * 1024) {
+        return `${Math.round(size / 1024)} KB`;
+      }
+      return `${(size / (1024 * 1024)).toFixed(1)} MB`;
     }
 
     function escapeHtml(value) {

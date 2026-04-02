@@ -30,7 +30,7 @@ test("getGuiModelGroups highlights current free OpenRouter models from live meta
           },
           {
             id: "anthropic/claude-sonnet-4",
-            name: "Claude Sonnet 4",
+            name: "Anthropic Sonnet 4",
             pricing: {
               prompt: "0.000003",
               completion: "0.000015",

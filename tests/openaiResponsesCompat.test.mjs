@@ -29,6 +29,29 @@ test("openAICompatibleMessagesToResponsesInput converts assistant tool history",
   ]);
 });
 
+test("openAICompatibleMessagesToResponsesInput keeps image parts for user messages", () => {
+  const input = openAICompatibleMessagesToResponsesInput([
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "Look at this screenshot." },
+        { type: "image_url", image_url: { url: "data:image/png;base64,abc123" } },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(input, [
+    {
+      type: "message",
+      role: "user",
+      content: [
+        { type: "input_text", text: "Look at this screenshot." },
+        { type: "input_image", image_url: "data:image/png;base64,abc123" },
+      ],
+    },
+  ]);
+});
+
 test("openAICompatibleToolsToResponsesTools flattens function tools", () => {
   const tools = openAICompatibleToolsToResponsesTools([
     {

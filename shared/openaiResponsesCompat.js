@@ -9,13 +9,13 @@ export function openAICompatibleMessagesToResponsesInput(messages) {
     }
 
     const role = typeof message.role === "string" ? message.role : "user";
-    const content = typeof message.content === "string" ? message.content : "";
+    const content = normalizeMessageContent(message.content);
 
     if (role === "tool") {
       input.push({
         type: "function_call_output",
         call_id: typeof message.tool_call_id === "string" ? message.tool_call_id : `call_${randomUUID()}`,
-        output: [{ type: "input_text", text: content }],
+        output: [{ type: "input_text", text: typeof content === "string" ? content : flattenContentText(content) }],
       });
       continue;
     }
@@ -24,13 +24,23 @@ export function openAICompatibleMessagesToResponsesInput(messages) {
       input.push({
         type: "message",
         role: "assistant",
-        content: [{ type: "output_text", text: content }],
+        content:
+          typeof content === "string"
+            ? [{ type: "output_text", text: content }]
+            : content
+                .filter((part) => isRecord(part) && part.type === "text" && typeof part.text === "string")
+                .map((part) => ({ type: "output_text", text: part.text })),
       });
     } else if ((role === "user" || role === "developer") && content.length > 0) {
       input.push({
         type: "message",
         role,
-        content: [{ type: "input_text", text: content }],
+        content:
+          typeof content === "string"
+            ? [{ type: "input_text", text: content }]
+            : content
+                .map((part) => toResponsesInputPart(part))
+                .filter((part) => part !== null),
       });
     }
 
@@ -52,6 +62,45 @@ export function openAICompatibleMessagesToResponsesInput(messages) {
   }
 
   return input;
+}
+
+function normalizeMessageContent(content) {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content.filter((part) => isRecord(part));
+  }
+
+  return "";
+}
+
+function flattenContentText(content) {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  return content
+    .map((part) => (isRecord(part) && typeof part.text === "string" ? part.text : ""))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function toResponsesInputPart(part) {
+  if (!isRecord(part)) {
+    return null;
+  }
+
+  if (part.type === "text" && typeof part.text === "string") {
+    return { type: "input_text", text: part.text };
+  }
+
+  if (part.type === "image_url" && isRecord(part.image_url) && typeof part.image_url.url === "string") {
+    return { type: "input_image", image_url: part.image_url.url };
+  }
+
+  return null;
 }
 
 export function findLatestResponsesContinuation(messages, responseIdByCallId) {

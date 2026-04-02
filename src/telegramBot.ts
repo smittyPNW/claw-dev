@@ -181,7 +181,7 @@ async function handleUpdate(update: TelegramUpdate): Promise<void> {
   let announcedToolStart = false;
   const pendingNotifications: Array<Promise<void>> = [];
 
-  const result = await session.agent.runTurn(command.prompt, (event) => {
+  const result = await session.agent.runTurn(command.prompt, [], (event: TurnEvent) => {
     pendingNotifications.push(
       handleTurnEvent(event).catch((error) => {
         const message = error instanceof Error ? error.message : String(error);

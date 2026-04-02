@@ -11,6 +11,12 @@ import {
   parseResponsesSseToResult,
   sliceResponsesInputToLatestToolTurn,
 } from "../shared/openaiResponsesCompat.js";
+import {
+  buildAnthropicUserContent,
+  buildGeminiUserParts,
+  buildOpenAIUserContent,
+  type ChatAttachment,
+} from "./chatAttachments.js";
 import { buildClawDevSystemPrompt } from "./systemPrompt.js";
 import { toolDefinitions, toolHandlers } from "./tools.js";
 
@@ -42,9 +48,14 @@ export type TurnEvent =
 export type TurnEventHandler = (event: TurnEvent) => void;
 
 export type ProviderName = "anthropic" | "gemini" | "openai" | "openrouter" | "ollama";
+export type { ChatAttachment } from "./chatAttachments.js";
 
 export interface LlmProvider {
-  runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult>;
+  runTurn(
+    prompt: string,
+    attachmentsOrHandler?: ChatAttachment[] | TurnEventHandler,
+    onEvent?: TurnEventHandler,
+  ): Promise<AgentTurnResult>;
   clear(): void;
 }
 
@@ -64,13 +75,18 @@ export class AnthropicProvider implements LlmProvider {
     this.messages.length = 0;
   }
 
-  async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
+  async runTurn(
+    prompt: string,
+    attachmentsOrHandler: ChatAttachment[] | TurnEventHandler = [],
+    onEvent?: TurnEventHandler,
+  ): Promise<AgentTurnResult> {
+    const { attachments, eventHandler } = normalizeTurnInputs(attachmentsOrHandler, onEvent);
     const systemPrompt = await buildClawDevSystemPrompt({ cwd: this.cwd, provider: "anthropic", model: this.model });
     this.messages.push({
       role: "user",
-      content: prompt,
+      content: buildAnthropicUserContent(prompt, attachments) as unknown as MessageParam["content"],
     });
-    emitTurnEvent(onEvent, {
+    emitTurnEvent(eventHandler, {
       type: "status",
       stage: "queued",
       message: "Prompt queued for Anthropic.",
@@ -79,7 +95,7 @@ export class AnthropicProvider implements LlmProvider {
     let assistantText = "";
 
     for (let i = 0; i < 8; i += 1) {
-      emitTurnEvent(onEvent, {
+      emitTurnEvent(eventHandler, {
         type: "status",
         stage: "requesting",
         message: `Requesting Anthropic response${i > 0 ? ` (pass ${i + 1})` : ""}.`,
@@ -104,7 +120,7 @@ export class AnthropicProvider implements LlmProvider {
 
       const toolUses = response.content.filter((block) => block.type === "tool_use");
       if (toolUses.length === 0) {
-        emitTurnEvent(onEvent, {
+        emitTurnEvent(eventHandler, {
           type: "status",
           stage: "complete",
           message: "Anthropic response complete.",
@@ -112,7 +128,7 @@ export class AnthropicProvider implements LlmProvider {
         return { text: assistantText };
       }
 
-      emitTurnEvent(onEvent, {
+      emitTurnEvent(eventHandler, {
         type: "status",
         stage: "tooling",
         message: `Running ${toolUses.length} tool${toolUses.length === 1 ? "" : "s"}.`,
@@ -122,7 +138,7 @@ export class AnthropicProvider implements LlmProvider {
       for (const toolUse of toolUses) {
         const handler = toolHandlers[toolUse.name];
         if (!handler) {
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: toolUse.name,
             callId: toolUse.id,
@@ -139,14 +155,14 @@ export class AnthropicProvider implements LlmProvider {
         }
 
         try {
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_start",
             toolName: toolUse.name,
             callId: toolUse.id,
             inputSummary: summarizeToolInput(toolUse.input as Record<string, unknown>),
           });
           const result = await handler(toolUse.input as Record<string, unknown>, this.cwd);
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: toolUse.name,
             callId: toolUse.id,
@@ -170,7 +186,7 @@ export class AnthropicProvider implements LlmProvider {
             is_error: true,
             content: error instanceof Error ? error.message : String(error),
           });
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: toolUse.name,
             callId: toolUse.id,
@@ -213,13 +229,18 @@ export class GeminiProvider implements LlmProvider {
     this.contents.length = 0;
   }
 
-  async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
+  async runTurn(
+    prompt: string,
+    attachmentsOrHandler: ChatAttachment[] | TurnEventHandler = [],
+    onEvent?: TurnEventHandler,
+  ): Promise<AgentTurnResult> {
+    const { attachments, eventHandler } = normalizeTurnInputs(attachmentsOrHandler, onEvent);
     const systemPrompt = await buildClawDevSystemPrompt({ cwd: this.cwd, provider: "gemini", model: this.model });
     this.contents.push({
       role: "user",
-      parts: [{ text: prompt }],
+      parts: buildGeminiUserParts(prompt, attachments),
     });
-    emitTurnEvent(onEvent, {
+    emitTurnEvent(eventHandler, {
       type: "status",
       stage: "queued",
       message: "Prompt queued for Gemini.",
@@ -228,7 +249,7 @@ export class GeminiProvider implements LlmProvider {
     let assistantText = "";
 
     for (let i = 0; i < 8; i += 1) {
-      emitTurnEvent(onEvent, {
+      emitTurnEvent(eventHandler, {
         type: "status",
         stage: "requesting",
         message: `Requesting Gemini response${i > 0 ? ` (pass ${i + 1})` : ""}.`,
@@ -274,7 +295,7 @@ export class GeminiProvider implements LlmProvider {
         .filter((call): call is { id?: string; name?: string; args?: unknown } => typeof call === "object" && call !== null);
 
       if (functionCalls.length === 0) {
-        emitTurnEvent(onEvent, {
+        emitTurnEvent(eventHandler, {
           type: "status",
           stage: "complete",
           message: "Gemini response complete.",
@@ -282,7 +303,7 @@ export class GeminiProvider implements LlmProvider {
         return { text: assistantText || response.text || "" };
       }
 
-      emitTurnEvent(onEvent, {
+      emitTurnEvent(eventHandler, {
         type: "status",
         stage: "tooling",
         message: `Running ${functionCalls.length} tool${functionCalls.length === 1 ? "" : "s"}.`,
@@ -296,7 +317,7 @@ export class GeminiProvider implements LlmProvider {
         const handler = toolHandlers[name];
 
         if (!handler) {
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: name,
             callId,
@@ -317,14 +338,14 @@ export class GeminiProvider implements LlmProvider {
 
         try {
           const input = isRecord(functionCall.args) ? functionCall.args : {};
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_start",
             toolName: name,
             callId,
             inputSummary: summarizeToolInput(input),
           });
           const result = await handler(input, this.cwd);
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: name,
             callId,
@@ -343,7 +364,7 @@ export class GeminiProvider implements LlmProvider {
             },
           });
         } catch (error) {
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: name,
             callId,
@@ -376,7 +397,7 @@ export class GeminiProvider implements LlmProvider {
 
 type OpenAICompatibleMessage = {
   role: "system" | "user" | "assistant" | "tool";
-  content: string;
+  content: string | Array<Record<string, unknown>>;
   tool_call_id?: string;
   tool_calls?: Array<{
     id: string;
@@ -429,13 +450,18 @@ class OpenAICompatibleProvider implements LlmProvider {
     this.messages.length = 0;
   }
 
-  async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
+  async runTurn(
+    prompt: string,
+    attachmentsOrHandler: ChatAttachment[] | TurnEventHandler = [],
+    onEvent?: TurnEventHandler,
+  ): Promise<AgentTurnResult> {
+    const { attachments, eventHandler } = normalizeTurnInputs(attachmentsOrHandler, onEvent);
     const systemPrompt = await buildClawDevSystemPrompt({ cwd: this.cwd, provider: this.providerName, model: this.model });
     this.messages.push({
       role: "user",
-      content: prompt,
+      content: buildOpenAIUserContent(prompt, attachments),
     });
-    emitTurnEvent(onEvent, {
+    emitTurnEvent(eventHandler, {
       type: "status",
       stage: "queued",
       message: "Prompt queued for provider.",
@@ -444,7 +470,7 @@ class OpenAICompatibleProvider implements LlmProvider {
     let assistantText = "";
 
     for (let i = 0; i < 8; i += 1) {
-      emitTurnEvent(onEvent, {
+      emitTurnEvent(eventHandler, {
         type: "status",
         stage: "requesting",
         message: `Requesting provider response${i > 0 ? ` (pass ${i + 1})` : ""}.`,
@@ -508,7 +534,7 @@ class OpenAICompatibleProvider implements LlmProvider {
       });
 
       if (toolCalls.length === 0) {
-        emitTurnEvent(onEvent, {
+        emitTurnEvent(eventHandler, {
           type: "status",
           stage: "complete",
           message: "Provider response complete.",
@@ -516,7 +542,7 @@ class OpenAICompatibleProvider implements LlmProvider {
         return { text: assistantText };
       }
 
-      emitTurnEvent(onEvent, {
+      emitTurnEvent(eventHandler, {
         type: "status",
         stage: "tooling",
         message: `Running ${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"}.`,
@@ -528,7 +554,7 @@ class OpenAICompatibleProvider implements LlmProvider {
         const handler = toolHandlers[name];
 
         if (!handler) {
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: name,
             callId,
@@ -546,14 +572,14 @@ class OpenAICompatibleProvider implements LlmProvider {
         try {
           const rawArgs = call.function?.arguments ?? "{}";
           const input = parseJsonRecord(rawArgs);
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_start",
             toolName: name,
             callId,
             inputSummary: summarizeToolInput(input),
           });
           const result = await handler(input, this.cwd);
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: name,
             callId,
@@ -567,7 +593,7 @@ class OpenAICompatibleProvider implements LlmProvider {
             content: result.content,
           });
         } catch (error) {
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: name,
             callId,
@@ -604,7 +630,12 @@ export class OpenAIProvider implements LlmProvider {
     this.messages.length = 0;
   }
 
-  async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
+  async runTurn(
+    prompt: string,
+    attachmentsOrHandler: ChatAttachment[] | TurnEventHandler = [],
+    onEvent?: TurnEventHandler,
+  ): Promise<AgentTurnResult> {
+    const { attachments, eventHandler } = normalizeTurnInputs(attachmentsOrHandler, onEvent);
     if (this.auth.status !== "ok") {
       throw new Error(formatOpenAIAuthHint(this.auth));
     }
@@ -613,9 +644,9 @@ export class OpenAIProvider implements LlmProvider {
 
     this.messages.push({
       role: "user",
-      content: prompt,
+      content: buildOpenAIUserContent(prompt, attachments),
     });
-    emitTurnEvent(onEvent, {
+    emitTurnEvent(eventHandler, {
       type: "status",
       stage: "queued",
       message: this.auth.authType === "oauth" ? "Prompt queued for ChatGPT session." : "Prompt queued for OpenAI API.",
@@ -624,7 +655,7 @@ export class OpenAIProvider implements LlmProvider {
     let assistantText = "";
 
     for (let i = 0; i < 8; i += 1) {
-      emitTurnEvent(onEvent, {
+      emitTurnEvent(eventHandler, {
         type: "status",
         stage: "requesting",
         message: `${this.auth.authType === "oauth" ? "Requesting ChatGPT" : "Requesting OpenAI"} response${i > 0 ? ` (pass ${i + 1})` : ""}.`,
@@ -644,7 +675,7 @@ export class OpenAIProvider implements LlmProvider {
       });
 
       if (turnResult.toolCalls.length === 0) {
-        emitTurnEvent(onEvent, {
+        emitTurnEvent(eventHandler, {
           type: "status",
           stage: "complete",
           message: auth.authType === "oauth" ? "ChatGPT response complete." : "OpenAI response complete.",
@@ -652,7 +683,7 @@ export class OpenAIProvider implements LlmProvider {
         return { text: assistantText };
       }
 
-      emitTurnEvent(onEvent, {
+      emitTurnEvent(eventHandler, {
         type: "status",
         stage: "tooling",
         message: `Running ${turnResult.toolCalls.length} tool${turnResult.toolCalls.length === 1 ? "" : "s"}.`,
@@ -664,7 +695,7 @@ export class OpenAIProvider implements LlmProvider {
         const handler = toolHandlers[name];
 
         if (!handler) {
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: name,
             callId,
@@ -682,14 +713,14 @@ export class OpenAIProvider implements LlmProvider {
         try {
           const rawArgs = call.function?.arguments ?? "{}";
           const input = parseJsonRecord(rawArgs);
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_start",
             toolName: name,
             callId,
             inputSummary: summarizeToolInput(input),
           });
           const resultContent = await handler(input, this.cwd);
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: name,
             callId,
@@ -704,7 +735,7 @@ export class OpenAIProvider implements LlmProvider {
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          emitTurnEvent(onEvent, {
+          emitTurnEvent(eventHandler, {
             type: "tool_result",
             toolName: name,
             callId,
@@ -915,6 +946,26 @@ export class OllamaProvider extends OpenAICompatibleProvider {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeTurnInputs(
+  attachmentsOrHandler: ChatAttachment[] | TurnEventHandler | undefined,
+  onEvent: TurnEventHandler | undefined,
+): {
+  attachments: ChatAttachment[];
+  eventHandler: TurnEventHandler | undefined;
+} {
+  if (typeof attachmentsOrHandler === "function") {
+    return {
+      attachments: [],
+      eventHandler: attachmentsOrHandler,
+    };
+  }
+
+  return {
+    attachments: Array.isArray(attachmentsOrHandler) ? attachmentsOrHandler : [],
+    eventHandler: onEvent,
+  };
 }
 
 function parseJsonRecord(value: string): Record<string, unknown> {

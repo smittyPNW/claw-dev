@@ -8,6 +8,7 @@ import {
   type ProviderName,
   type TurnEventHandler,
 } from "./providers.js";
+import type { ChatAttachment } from "./chatAttachments.js";
 
 export type AgentTurnResult = {
   text: string;
@@ -81,7 +82,11 @@ export class CodingAgent {
     this.provider.clear();
   }
 
-  async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
-    return this.provider.runTurn(prompt, onEvent);
+  async runTurn(
+    prompt: string,
+    attachmentsOrHandler: ChatAttachment[] | TurnEventHandler = [],
+    onEvent?: TurnEventHandler,
+  ): Promise<AgentTurnResult> {
+    return this.provider.runTurn(prompt, attachmentsOrHandler, onEvent);
   }
 }

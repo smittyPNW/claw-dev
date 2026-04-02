@@ -84,3 +84,19 @@ test("loadConfig supports ollama in the top-level app path", () => {
   assert.equal(config.model, "qwen3");
   assert.equal(config.baseUrl, "http://127.0.0.1:11434");
 });
+
+test("loadConfig supports huggingface in the top-level app path", () => {
+  process.env = {
+    ...ORIGINAL_ENV,
+    LLM_PROVIDER: "huggingface",
+    HF_TOKEN: "hf_test_key",
+    HUGGINGFACE_MODEL: "openai/gpt-oss-120b:fastest",
+    HUGGINGFACE_BASE_URL: "https://router.huggingface.co/v1",
+  };
+
+  const config = loadConfig();
+  assert.equal(config.provider, "huggingface");
+  assert.equal(config.apiKey, "hf_test_key");
+  assert.equal(config.model, "openai/gpt-oss-120b:fastest");
+  assert.equal(config.baseUrl, "https://router.huggingface.co/v1");
+});

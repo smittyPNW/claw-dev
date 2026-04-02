@@ -6,7 +6,7 @@ import type { ProviderName } from "./providers.js";
 
 loadEnv({ quiet: true });
 
-const providerSchema = z.enum(["anthropic", "gemini", "openai", "openrouter", "ollama"]);
+const providerSchema = z.enum(["anthropic", "gemini", "openai", "openrouter", "huggingface", "ollama"]);
 
 const envSchema = z.object({
   LLM_PROVIDER: z.preprocess(
@@ -25,6 +25,8 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().min(1).default("gpt-5.2-codex"),
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_MODEL: z.string().min(1).default("anthropic/claude-sonnet-4"),
+  HF_TOKEN: z.string().optional(),
+  HUGGINGFACE_MODEL: z.string().min(1).default("openai/gpt-oss-120b:fastest"),
   OLLAMA_BASE_URL: z.string().optional(),
   OLLAMA_MODEL: z.string().min(1).default("qwen3"),
   OLLAMA_API_KEY: z.string().optional(),
@@ -84,6 +86,19 @@ export function loadConfig(overrides?: Partial<Pick<AppConfig, "provider" | "mod
       apiKey,
       model: overrides?.model ?? parsed.data.OPENROUTER_MODEL,
       baseUrl: process.env.OPENROUTER_BASE_URL?.trim() || "https://openrouter.ai/api/v1",
+    };
+  }
+
+  if (provider === "huggingface") {
+    const apiKey = parsed.data.HF_TOKEN?.trim();
+    if (!apiKey) {
+      throw new Error("HF_TOKEN is required when LLM_PROVIDER=huggingface");
+    }
+    return {
+      provider,
+      apiKey,
+      model: overrides?.model ?? parsed.data.HUGGINGFACE_MODEL,
+      baseUrl: process.env.HUGGINGFACE_BASE_URL?.trim() || "https://router.huggingface.co/v1",
     };
   }
 

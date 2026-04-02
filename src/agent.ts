@@ -1,6 +1,7 @@
 import {
   AnthropicProvider,
   GeminiProvider,
+  HuggingFaceProvider,
   OpenAIProvider,
   OllamaProvider,
   OpenRouterProvider,
@@ -37,6 +38,24 @@ export class CodingAgent {
 
     if (args.provider === "openrouter") {
       this.provider = new OpenRouterProvider(
+        args.baseUrl !== undefined
+          ? {
+              apiKey: args.apiKey,
+              model: args.model,
+              cwd: args.cwd,
+              baseUrl: args.baseUrl,
+            }
+          : {
+              apiKey: args.apiKey,
+              model: args.model,
+              cwd: args.cwd,
+            },
+      );
+      return;
+    }
+
+    if (args.provider === "huggingface") {
+      this.provider = new HuggingFaceProvider(
         args.baseUrl !== undefined
           ? {
               apiKey: args.apiKey,

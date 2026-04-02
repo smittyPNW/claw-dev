@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { OllamaProvider, OpenAIProvider, OpenRouterProvider } from "../dist/providers.js";
+import { HuggingFaceProvider, OllamaProvider, OpenAIProvider, OpenRouterProvider } from "../dist/providers.js";
 
 function buildJwtWithExp(expSeconds) {
   const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
@@ -48,6 +48,47 @@ test("OpenRouterProvider sends requests to the configured base URL with auth", a
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, "https://openrouter.ai/api/v1/chat/completions");
     assert.equal(calls[0].init.headers.Authorization, "Bearer or-test-key");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("HuggingFaceProvider sends requests to the configured base URL with auth", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init });
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: "hello from hugging face",
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  };
+
+  try {
+    const provider = new HuggingFaceProvider({
+      apiKey: "hf-test-key",
+      model: "openai/gpt-oss-120b:fastest",
+      cwd: process.cwd(),
+      baseUrl: "https://router.huggingface.co/v1",
+    });
+
+    const result = await provider.runTurn("say hello");
+    assert.equal(result.text, "hello from hugging face");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://router.huggingface.co/v1/chat/completions");
+    assert.equal(calls[0].init.headers.Authorization, "Bearer hf-test-key");
   } finally {
     globalThis.fetch = originalFetch;
   }

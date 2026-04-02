@@ -170,11 +170,12 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/api/meta") {
       const openAiAuth = getOpenAIAuthPanelState({ env: process.env });
-      const [anthropicModels, geminiModels, openAiModels, openRouterState, ollamaModels, ollamaRuntime] = await Promise.all([
+      const [anthropicModels, geminiModels, openAiModels, openRouterState, huggingFaceModels, ollamaModels, ollamaRuntime] = await Promise.all([
         getGuiModelGroups("anthropic"),
         getGuiModelGroups("gemini"),
         getGuiModelGroups("openai"),
         getOpenRouterCatalogState(),
+        getGuiModelGroups("huggingface"),
         getGuiModelGroups("ollama"),
         getOllamaRuntimeState(process.env),
       ]);
@@ -224,6 +225,16 @@ const server = createServer(async (req, res) => {
               nextRefreshAt: openRouterState.nextRefreshAt,
               source: openRouterState.source,
             },
+          },
+          {
+            value: "huggingface",
+            label: "Hugging Face",
+            defaultModel: process.env.HUGGINGFACE_MODEL || "openai/gpt-oss-120b:fastest",
+            status: process.env.HF_TOKEN ? "configured" : "missing-key",
+            detail: process.env.HF_TOKEN
+              ? "HF token available for Hugging Face Inference Providers."
+              : "Set HF_TOKEN to use Hugging Face hosted models.",
+            modelGroups: huggingFaceModels,
           },
           {
             value: "ollama",
@@ -753,7 +764,7 @@ function relativeHeartbeatTime(iso: string): string {
 
 function decodeProviderFromPath(pathname: string): KeyBackedProvider {
   const provider = pathname.split("/").at(-1)?.trim();
-  if (provider !== "anthropic" && provider !== "gemini" && provider !== "openai" && provider !== "openrouter") {
+  if (provider !== "anthropic" && provider !== "gemini" && provider !== "openai" && provider !== "openrouter" && provider !== "huggingface") {
     throw httpError(404, "Provider secret route not found.");
   }
   return provider;

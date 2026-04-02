@@ -22,7 +22,7 @@ needs_build() {
 
 ensure_build() {
   if needs_build; then
-    (cd "${REPO_ROOT}" && ./node_modules/.bin/tsc -p tsconfig.json)
+    (cd "${REPO_ROOT}" && node ./node_modules/typescript/bin/tsc -p tsconfig.json)
   fi
 }
 

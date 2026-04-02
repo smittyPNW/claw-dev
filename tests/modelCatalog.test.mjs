@@ -116,6 +116,20 @@ test("getGuiModelGroups returns small coding-focused Ollama recommendations", as
   assert.ok(smallLocal.options.some((option) => option.value === "codegemma:2b"));
 });
 
+test("getGuiModelGroups returns curated Hugging Face router models", async () => {
+  const groups = await getGuiModelGroups("huggingface", {
+    HUGGINGFACE_MODEL: "openai/gpt-oss-120b:fastest",
+  });
+
+  const configured = groups.find((group) => group.id === "configured");
+  const coding = groups.find((group) => group.id === "coding");
+
+  assert.ok(configured);
+  assert.equal(configured.options[0].value, "openai/gpt-oss-120b:fastest");
+  assert.ok(coding);
+  assert.ok(coding.options.some((option) => option.value === "deepseek-ai/DeepSeek-R1:fastest"));
+});
+
 test("getGuiModelGroups includes locally installed Ollama models when the runtime is available", async () => {
   const originalFetch = globalThis.fetch;
 

@@ -12,6 +12,7 @@ test("providerLabel returns human readable provider names", () => {
   assert.equal(providerLabel("openai"), "OpenAI");
   assert.equal(providerLabel("gemini"), "Google Gemini");
   assert.equal(providerLabel("openrouter"), "OpenRouter");
+  assert.equal(providerLabel("huggingface"), "Hugging Face");
 });
 
 test("providerModelCatalog keeps the ChatGPT lane focused on Codex", () => {
@@ -49,4 +50,10 @@ test("openrouter catalog includes provider-qualified model ids", () => {
   assert.equal(catalog[0], "anthropic/claude-sonnet-4");
   assert.ok(catalog.includes("google/gemini-2.5-flash"));
   assert.ok(catalog.includes("openai/gpt-oss-120b"));
+});
+
+test("huggingface catalog includes hosted router model ids", () => {
+  const catalog = providerModelCatalog("huggingface", { HUGGINGFACE_MODEL: "openai/gpt-oss-120b:fastest" });
+  assert.equal(catalog[0], "openai/gpt-oss-120b:fastest");
+  assert.ok(catalog.includes("deepseek-ai/DeepSeek-R1:fastest"));
 });

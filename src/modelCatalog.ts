@@ -59,7 +59,7 @@ let openRouterCache:
   | undefined;
 
 export async function getGuiModelGroups(
-  provider: "anthropic" | "gemini" | "openai" | "openrouter" | "ollama",
+  provider: "anthropic" | "gemini" | "openai" | "openrouter" | "huggingface" | "ollama",
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<GuiModelGroup[]> {
   if (provider === "anthropic") {
@@ -140,6 +140,58 @@ export async function getGuiModelGroups(
 
   if (provider === "openrouter") {
     return (await getOpenRouterCatalogState(env)).groups;
+  }
+
+  if (provider === "huggingface") {
+    return [
+      {
+        id: "configured",
+        label: "Configured Hugging Face Route",
+        options: uniqueOptions([
+          {
+            value: env.HUGGINGFACE_MODEL?.trim() || "openai/gpt-oss-120b:fastest",
+            label: env.HUGGINGFACE_MODEL?.trim() || "openai/gpt-oss-120b:fastest",
+            description: "Configured Hugging Face router model for the direct app path.",
+            badge: "Configured",
+            emphasis: "recommended",
+          },
+        ]),
+      },
+      {
+        id: "coding",
+        label: "Coding-Friendly Hosted Routes",
+        options: uniqueOptions([
+          {
+            value: "openai/gpt-oss-120b:fastest",
+            label: "GPT OSS 120B Fastest",
+            description: "Fastest available hosted route for GPT OSS 120B through the Hugging Face router.",
+            badge: "Recommended",
+            emphasis: "recommended",
+          },
+          {
+            value: "openai/gpt-oss-20b:fastest",
+            label: "GPT OSS 20B Fastest",
+            description: "Lighter hosted coding route with automatic fastest-provider selection.",
+            badge: "Lightweight",
+            emphasis: "default",
+          },
+          {
+            value: "deepseek-ai/DeepSeek-R1:fastest",
+            label: "DeepSeek R1 Fastest",
+            description: "Reasoning-heavy route with automatic fastest-provider selection.",
+            badge: "Reasoning",
+            emphasis: "recommended",
+          },
+          {
+            value: "deepseek-ai/DeepSeek-V3-0324:fastest",
+            label: "DeepSeek V3 Fastest",
+            description: "General high-capability chat-completion route through the Hugging Face router.",
+            badge: "Versatile",
+            emphasis: "default",
+          },
+        ]),
+      },
+    ];
   }
 
   if (provider === "ollama") {

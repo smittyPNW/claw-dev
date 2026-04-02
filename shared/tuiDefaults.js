@@ -1,12 +1,13 @@
 import { resolveOpenAIAuth } from "./openaiAuth.js";
 
-const PROVIDERS = ["anthropic", "openai", "gemini", "groq", "openrouter", "copilot", "zai", "ollama"];
+const PROVIDERS = ["anthropic", "openai", "gemini", "groq", "openrouter", "huggingface", "copilot", "zai", "ollama"];
 
 const SECRET_KEYS_BY_PROVIDER = {
   anthropic: ["ANTHROPIC_API_KEY"],
   gemini: ["GEMINI_API_KEY"],
   groq: ["GROQ_API_KEY"],
   openrouter: ["OPENROUTER_API_KEY"],
+  huggingface: ["HF_TOKEN"],
   copilot: ["COPILOT_TOKEN", "GITHUB_MODELS_TOKEN"],
   zai: ["ZAI_API_KEY"],
 };
@@ -24,6 +25,9 @@ export function normalizeProviderName(raw) {
   }
   if (value === "router") {
     return "openrouter";
+  }
+  if (value === "hf" || value === "huggingface" || value === "hugging-face") {
+    return "huggingface";
   }
   if (value === "z.ai") {
     return "zai";
@@ -56,6 +60,10 @@ export function resolveConfiguredProvider(env = process.env, options = {}) {
 
   if (hasConfiguredProviderSecret("openrouter", env)) {
     return "openrouter";
+  }
+
+  if (hasConfiguredProviderSecret("huggingface", env)) {
+    return "huggingface";
   }
 
   if (hasConfiguredProviderSecret("anthropic", env)) {

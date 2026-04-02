@@ -17,6 +17,7 @@ function buildJwt(expSeconds) {
 test("normalizeProviderName maps common aliases", () => {
   assert.equal(normalizeProviderName("chatgpt"), "openai");
   assert.equal(normalizeProviderName("router"), "openrouter");
+  assert.equal(normalizeProviderName("hf"), "huggingface");
   assert.equal(normalizeProviderName("github-models"), "copilot");
 });
 
@@ -47,6 +48,17 @@ test("resolvePreferredProvider respects an explicit configured provider", () => 
   };
 
   assert.equal(resolvePreferredProvider(env), "ollama");
+});
+
+test("resolveConfiguredProvider recognizes Hugging Face tokens", () => {
+  const env = {
+    OPENAI_AUTH_TOKEN: "",
+    OPENAI_API_KEY: "",
+    OPENROUTER_API_KEY: "",
+    HF_TOKEN: "hf_test_key",
+  };
+
+  assert.equal(resolveConfiguredProvider(env, { openAIAuth: { status: "missing" } }), "huggingface");
 });
 
 test("shouldPromptForModelSelection defaults to straight-through startup", () => {

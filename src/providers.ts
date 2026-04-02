@@ -47,7 +47,7 @@ export type TurnEvent =
 
 export type TurnEventHandler = (event: TurnEvent) => void;
 
-export type ProviderName = "anthropic" | "gemini" | "openai" | "openrouter" | "ollama";
+export type ProviderName = "anthropic" | "gemini" | "openai" | "openrouter" | "huggingface" | "ollama";
 export type { ChatAttachment } from "./chatAttachments.js";
 
 const MAX_TOOL_PASSES = 16;
@@ -964,6 +964,18 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
   }
 }
 
+export class HuggingFaceProvider extends OpenAICompatibleProvider {
+  constructor(args: { apiKey: string; model: string; cwd: string; baseUrl?: string }) {
+    super({
+      providerName: "huggingface",
+      apiKey: args.apiKey,
+      model: args.model,
+      cwd: args.cwd,
+      baseUrl: args.baseUrl ?? "https://router.huggingface.co/v1",
+    });
+  }
+}
+
 export class OllamaProvider extends OpenAICompatibleProvider {
   constructor(args: { apiKey?: string; model: string; cwd: string; baseUrl?: string }) {
     const baseArgs = {
@@ -1082,6 +1094,7 @@ function formatOpenAICompatibleProviderError(
   const normalizedBaseUrl = baseUrl.toLowerCase();
   const isOllama = normalizedBaseUrl.includes("127.0.0.1:11434") || normalizedBaseUrl.includes("localhost:11434");
   const isOpenRouter = normalizedBaseUrl.includes("openrouter.ai");
+  const isHuggingFace = normalizedBaseUrl.includes("router.huggingface.co");
 
   if (isOllama) {
     if (status === 404 && detail) {
@@ -1119,6 +1132,24 @@ function formatOpenAICompatibleProviderError(
       : `OpenRouter request failed with status ${status}.`;
   }
 
+  if (isHuggingFace) {
+    if (status === 401 || status === 403) {
+      return detail
+        ? `Hugging Face request failed with status ${status}: ${detail}. Check HF_TOKEN and your Hugging Face inference permissions.`
+        : `Hugging Face request failed with status ${status}. Check HF_TOKEN and your Hugging Face inference permissions.`;
+    }
+
+    if (status === 429) {
+      return detail
+        ? `Hugging Face request failed with status 429: ${detail}. The selected route is rate-limited or saturated right now.`
+        : "Hugging Face request failed with status 429. The selected route is rate-limited or saturated right now.";
+    }
+
+    return detail
+      ? `Hugging Face request failed with status ${status}: ${detail}`
+      : `Hugging Face request failed with status ${status}.`;
+  }
+
   return detail
     ? `Provider request failed with status ${status}: ${detail}`
     : `Provider request failed with status ${status}.`;
@@ -1134,7 +1165,7 @@ async function fetchWithProviderTimeout(
   },
 ): Promise<Response> {
   const timeoutMs = args.timeoutMs
-    ?? (args.provider === "openrouter" ? 240000 : args.provider === "openai" ? 180000 : 120000);
+    ?? (args.provider === "openrouter" ? 240000 : args.provider === "openai" || args.provider === "huggingface" ? 180000 : 120000);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error("provider-timeout")), timeoutMs);
 
@@ -1165,6 +1196,9 @@ function providerTimeoutLabel(provider: ProviderName, normalizedUrl: string): st
   }
   if (provider === "openai") {
     return "OpenAI";
+  }
+  if (provider === "huggingface" || normalizedUrl.includes("router.huggingface.co")) {
+    return "Hugging Face";
   }
   return "Provider";
 }

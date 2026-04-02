@@ -1,7 +1,7 @@
 import { chmod, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export type KeyBackedProvider = "anthropic" | "gemini" | "openai" | "openrouter";
+export type KeyBackedProvider = "anthropic" | "gemini" | "openai" | "openrouter" | "huggingface";
 
 type ProviderSecretMeta = {
   envKey: string;
@@ -24,6 +24,10 @@ const PROVIDER_SECRET_META: Record<KeyBackedProvider, ProviderSecretMeta> = {
   openrouter: {
     envKey: "OPENROUTER_API_KEY",
     label: "OpenRouter API Key",
+  },
+  huggingface: {
+    envKey: "HF_TOKEN",
+    label: "Hugging Face API Token",
   },
 };
 

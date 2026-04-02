@@ -161,7 +161,7 @@ export function detectWinget(): boolean {
  * by querying pacman's database for file ownership.
  *
  * We gate on the Arch distro family before invoking pacman. On other distros
- * like Ubuntu/Debian, 'pacman' in PATH may resolve to the pacman game
+ * like Ubuntu/Debian, 'pacman' in PATH may resolve to the pacman dotfiles
  * (/usr/games/pacman) rather than the Arch package manager.
  */
 export const detectPacman = memoize(async (): Promise<boolean> => {

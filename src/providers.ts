@@ -50,6 +50,10 @@ export type TurnEventHandler = (event: TurnEvent) => void;
 export type ProviderName = "anthropic" | "gemini" | "openai" | "openrouter" | "ollama";
 export type { ChatAttachment } from "./chatAttachments.js";
 
+const MAX_TOOL_PASSES = 16;
+const TOOL_ITERATION_LIMIT_MESSAGE =
+  "Claw Dev stopped after reaching the tool iteration limit. The model kept using tools without finishing the response. Ask it to continue, narrow the task, or switch models if this keeps happening.";
+
 export interface LlmProvider {
   runTurn(
     prompt: string,
@@ -94,7 +98,7 @@ export class AnthropicProvider implements LlmProvider {
 
     let assistantText = "";
 
-    for (let i = 0; i < 8; i += 1) {
+    for (let i = 0; i < MAX_TOOL_PASSES; i += 1) {
       emitTurnEvent(eventHandler, {
         type: "status",
         stage: "requesting",
@@ -203,7 +207,7 @@ export class AnthropicProvider implements LlmProvider {
     }
 
     return {
-      text: assistantText || "Stopped after reaching the tool iteration limit.",
+      text: assistantText || TOOL_ITERATION_LIMIT_MESSAGE,
     };
   }
 }
@@ -248,7 +252,7 @@ export class GeminiProvider implements LlmProvider {
 
     let assistantText = "";
 
-    for (let i = 0; i < 8; i += 1) {
+    for (let i = 0; i < MAX_TOOL_PASSES; i += 1) {
       emitTurnEvent(eventHandler, {
         type: "status",
         stage: "requesting",
@@ -390,7 +394,7 @@ export class GeminiProvider implements LlmProvider {
     }
 
     return {
-      text: assistantText || "Stopped after reaching the tool iteration limit.",
+      text: assistantText || TOOL_ITERATION_LIMIT_MESSAGE,
     };
   }
 }
@@ -427,6 +431,11 @@ type OpenAICompatibleResponse = {
   }>;
   error?: {
     message?: string;
+    metadata?: {
+      raw?: string;
+      provider_name?: string;
+      is_byok?: boolean;
+    };
   };
 };
 
@@ -469,13 +478,26 @@ class OpenAICompatibleProvider implements LlmProvider {
 
     let assistantText = "";
 
-    for (let i = 0; i < 8; i += 1) {
+    for (let i = 0; i < MAX_TOOL_PASSES; i += 1) {
       emitTurnEvent(eventHandler, {
         type: "status",
         stage: "requesting",
         message: `Requesting provider response${i > 0 ? ` (pass ${i + 1})` : ""}.`,
       });
-      const response = await fetchWithProviderTimeout(`${this.baseUrl}/chat/completions`, {
+      const requestPayload = {
+        model: this.model,
+        messages: [{ role: "system", content: systemPrompt }, ...this.messages],
+        tools: toolDefinitions.map((tool) => ({
+          type: "function",
+          function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.input_schema,
+          },
+        })),
+      };
+
+      let response = await fetchWithProviderTimeout(`${this.baseUrl}/chat/completions`, {
         provider: this.providerName,
         model: this.model,
         init: {
@@ -484,22 +506,41 @@ class OpenAICompatibleProvider implements LlmProvider {
             "Content-Type": "application/json",
             ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
           },
-          body: JSON.stringify({
-            model: this.model,
-            messages: [{ role: "system", content: systemPrompt }, ...this.messages],
-            tools: toolDefinitions.map((tool) => ({
-              type: "function",
-              function: {
-                name: tool.name,
-                description: tool.description,
-                parameters: tool.input_schema,
-              },
-            })),
-          }),
+          body: JSON.stringify(requestPayload),
         },
       });
 
-      const json = (await response.json()) as OpenAICompatibleResponse;
+      let json = (await response.json()) as OpenAICompatibleResponse;
+      const shouldFallbackToOpenRouterRouter =
+        this.providerName === "openrouter"
+        && this.model.endsWith(":free")
+        && this.model !== "openrouter/free"
+        && response.status === 429;
+
+      if (shouldFallbackToOpenRouterRouter) {
+        emitTurnEvent(eventHandler, {
+          type: "status",
+          stage: "requesting",
+          message: `OpenRouter rate-limited ${this.model}. Retrying with the Free Models Router.`,
+        });
+        response = await fetchWithProviderTimeout(`${this.baseUrl}/chat/completions`, {
+          provider: this.providerName,
+          model: "openrouter/free",
+          init: {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+            },
+            body: JSON.stringify({
+              ...requestPayload,
+              model: "openrouter/free",
+            }),
+          },
+        });
+        json = (await response.json()) as OpenAICompatibleResponse;
+      }
+
       if (!response.ok) {
         throw new Error(formatOpenAICompatibleProviderError(this.baseUrl, this.model, response.status, json));
       }
@@ -610,7 +651,7 @@ class OpenAICompatibleProvider implements LlmProvider {
     }
 
     return {
-      text: assistantText || "Stopped after reaching the tool iteration limit.",
+      text: assistantText || TOOL_ITERATION_LIMIT_MESSAGE,
     };
   }
 }
@@ -654,7 +695,7 @@ export class OpenAIProvider implements LlmProvider {
 
     let assistantText = "";
 
-    for (let i = 0; i < 8; i += 1) {
+    for (let i = 0; i < MAX_TOOL_PASSES; i += 1) {
       emitTurnEvent(eventHandler, {
         type: "status",
         stage: "requesting",
@@ -752,7 +793,7 @@ export class OpenAIProvider implements LlmProvider {
     }
 
     return {
-      text: assistantText || "Stopped after reaching the tool iteration limit.",
+      text: assistantText || TOOL_ITERATION_LIMIT_MESSAGE,
     };
   }
 
@@ -1053,6 +1094,8 @@ function formatOpenAICompatibleProviderError(
   }
 
   if (isOpenRouter) {
+    const rawDetail = response.error?.metadata?.raw?.trim();
+
     if (detail && /guardrail restrictions|data policy|settings\/privacy|no endpoints available/i.test(detail)) {
       return [
         `OpenRouter could not route model "${model}" because your current privacy or guardrail settings blocked every available endpoint.`,
@@ -1063,6 +1106,12 @@ function formatOpenAICompatibleProviderError(
 
     if (status === 404 && detail) {
       return `OpenRouter request failed for model "${model}": ${detail}. Check the exact model id and, if needed, try the Free Models Router or another free model.`;
+    }
+
+    if (status === 429) {
+      return rawDetail
+        ? `OpenRouter rate-limited model "${model}": ${rawDetail}`
+        : `OpenRouter rate-limited model "${model}". Try again shortly, switch models, or use the Free Models Router.`;
     }
 
     return detail
@@ -1084,7 +1133,8 @@ async function fetchWithProviderTimeout(
     timeoutMs?: number;
   },
 ): Promise<Response> {
-  const timeoutMs = args.timeoutMs ?? 90000;
+  const timeoutMs = args.timeoutMs
+    ?? (args.provider === "openrouter" ? 240000 : args.provider === "openai" ? 180000 : 120000);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error("provider-timeout")), timeoutMs);
 

@@ -3368,6 +3368,10 @@
     let workspacePreviewObjectUrl = null;
     let pendingChatAttachments = [];
     const collapsedWorkspaceDirs = new Set();
+    const LAST_WORKSPACE_STORAGE_KEY = "claw-dev:last-workspace";
+    const LAST_MODELS_STORAGE_KEY = "claw-dev:last-models";
+    const INITIAL_STREAM_EVENT_TIMEOUT_MS = 60000;
+    const ACTIVE_STREAM_IDLE_TIMEOUT_MS = 240000;
 
     const metadataHeartbeatMs = 60000;
     const updateHeartbeatMs = 300000;
@@ -3381,6 +3385,75 @@
       addActivity("Boot error", error.message || String(error), "error");
     });
 
+    function readStoredWorkspace() {
+      try {
+        return window.localStorage.getItem(LAST_WORKSPACE_STORAGE_KEY) || "";
+      } catch {
+        return "";
+      }
+    }
+
+    function persistWorkspaceSelection(nextWorkspace) {
+      const trimmed = (nextWorkspace || "").trim();
+      try {
+        if (trimmed) {
+          window.localStorage.setItem(LAST_WORKSPACE_STORAGE_KEY, trimmed);
+        } else {
+          window.localStorage.removeItem(LAST_WORKSPACE_STORAGE_KEY);
+        }
+      } catch {}
+    }
+
+    function applyWorkspaceSelection(nextWorkspace) {
+      cwdEl.value = (nextWorkspace || "").trim();
+      persistWorkspaceSelection(cwdEl.value);
+      syncSignals();
+    }
+
+    function readStoredModels() {
+      try {
+        const raw = window.localStorage.getItem(LAST_MODELS_STORAGE_KEY);
+        if (!raw) {
+          return {};
+        }
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function readStoredModelForProvider(providerValue) {
+      const models = readStoredModels();
+      const stored = models?.[providerValue];
+      return typeof stored === "string" ? stored.trim() : "";
+    }
+
+    function persistModelSelection(providerValue, nextModel) {
+      if (!providerValue) {
+        return;
+      }
+
+      const trimmed = (nextModel || "").trim();
+      try {
+        const models = readStoredModels();
+        if (trimmed) {
+          models[providerValue] = trimmed;
+        } else {
+          delete models[providerValue];
+        }
+        window.localStorage.setItem(LAST_MODELS_STORAGE_KEY, JSON.stringify(models));
+      } catch {}
+    }
+
+    function applyModelSelection(providerValue, nextModel, touched = true) {
+      const trimmed = (nextModel || "").trim();
+      modelEl.value = trimmed;
+      modelSelectEl.value = trimmed;
+      modelEl.dataset.touched = touched ? "true" : "";
+      persistModelSelection(providerValue, trimmed);
+    }
+
     providerEl.addEventListener("change", () => {
       if (!metadata) {
         return;
@@ -3389,9 +3462,13 @@
       const selected = getSelectedProviderMeta();
       populateModelSelect(selected);
       populateCustomModelOptions(selected);
-      if (selected && !modelEl.dataset.touched) {
-        modelEl.value = selected.defaultModel;
-        modelSelectEl.value = selected.defaultModel;
+      if (selected) {
+        const storedModel = readStoredModelForProvider(selected.value);
+        if (storedModel) {
+          applyModelSelection(selected.value, storedModel, true);
+        } else if (!modelEl.dataset.touched) {
+          applyModelSelection(selected.value, selected.defaultModel, false);
+        }
       }
 
       renderProviderSetup();
@@ -3401,8 +3478,7 @@
 
     modelSelectEl.addEventListener("change", () => {
       if (modelSelectEl.value) {
-        modelEl.value = modelSelectEl.value;
-        modelEl.dataset.touched = "";
+        applyModelSelection(providerEl.value, modelSelectEl.value, true);
       }
       renderModelSpotlight();
       syncSignals();
@@ -3410,6 +3486,7 @@
 
     modelEl.addEventListener("input", () => {
       modelEl.dataset.touched = "true";
+      persistModelSelection(providerEl.value, modelEl.value.trim());
       if (modelSelectEl.value !== modelEl.value.trim()) {
         modelSelectEl.value = "";
       }
@@ -3419,6 +3496,7 @@
     });
 
     cwdEl.addEventListener("input", () => {
+      persistWorkspaceSelection(cwdEl.value);
       syncSignals();
     });
 
@@ -3430,8 +3508,7 @@
       if (!metadata?.defaultCwd) {
         return;
       }
-      cwdEl.value = metadata.defaultCwd;
-      syncSignals();
+      applyWorkspaceSelection(metadata.defaultCwd);
       void loadWorkspaceTree(true);
       setStatus("Workspace set to this Claw Dev repo.", false);
     });
@@ -3848,18 +3925,20 @@
         || payload.providers[0];
 
       providerEl.value = preferred.value;
-      cwdEl.value = initial ? payload.defaultCwd : cwdEl.value;
+      const preferredWorkspace = initial ? (readStoredWorkspace() || payload.defaultCwd) : cwdEl.value;
+      applyWorkspaceSelection(preferredWorkspace);
 
       populateModelSelect(preferred);
       populateCustomModelOptions(preferred);
 
+      const storedModel = readStoredModelForProvider(preferred.value);
+
       if (shouldPreserveManualModel && currentCustomModel) {
-        modelEl.value = currentCustomModel;
-        modelSelectEl.value = currentCustomModel;
+        applyModelSelection(preferred.value, currentCustomModel, true);
+      } else if (storedModel) {
+        applyModelSelection(preferred.value, storedModel, true);
       } else {
-        modelEl.value = preferred.defaultModel;
-        modelEl.dataset.touched = "";
-        modelSelectEl.value = preferred.defaultModel;
+        applyModelSelection(preferred.value, preferred.defaultModel, false);
       }
 
       metricProviderCountEl.textContent = String(payload.providers.length);
@@ -3901,8 +3980,7 @@
         await refreshMetadata(true);
         const openRouter = metadata?.providers?.find((provider) => provider.value === "openrouter");
         if (providerEl.value === "openrouter" && modelEl.dataset.touched !== "true") {
-          modelEl.value = openRouter?.defaultModel || payload.preferredModel;
-          modelSelectEl.value = modelEl.value;
+          applyModelSelection("openrouter", openRouter?.defaultModel || payload.preferredModel, false);
           renderModelSpotlight();
           syncSignals();
         }
@@ -4005,22 +4083,8 @@
     async function startSession() {
       setBusy(true, "Starting session...");
       try {
-        const response = await fetch("/api/sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            provider: providerEl.value,
-            model: modelEl.value.trim(),
-            cwd: cwdEl.value.trim(),
-          }),
-        });
-
-        const payload = await response.json();
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload.error || "Failed to create session.");
-        }
-
-        session = payload.session;
+        session = await createSessionFromCurrentSelection();
+        applyWorkspaceSelection(session.cwd);
         resetTranscript(false);
         appendMessage("system", `Session started.\nProvider: ${session.provider}\nModel: ${session.model}\nWorkspace: ${session.cwd}`);
         updateSessionBadge("live", `${session.provider} live`);
@@ -4037,6 +4101,43 @@
       } finally {
         setBusy(false);
       }
+    }
+
+    function getCurrentSessionSelection() {
+      return {
+        provider: providerEl.value,
+        model: modelEl.value.trim(),
+        cwd: cwdEl.value.trim(),
+      };
+    }
+
+    function doesSessionMatchSelection(activeSession) {
+      if (!activeSession) {
+        return false;
+      }
+
+      const selection = getCurrentSessionSelection();
+      return (
+        activeSession.provider === selection.provider
+        && activeSession.model === selection.model
+        && activeSession.cwd === selection.cwd
+      );
+    }
+
+    async function createSessionFromCurrentSelection() {
+      const selection = getCurrentSessionSelection();
+      const response = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(selection),
+      });
+
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "Failed to create session.");
+      }
+
+      return payload.session;
     }
 
     async function resetSession() {
@@ -4072,9 +4173,36 @@
     }
 
     async function sendPrompt() {
-      if (!session) {
-        setStatus("Start a session first.", true);
-        return;
+      if (!session || !doesSessionMatchSelection(session)) {
+        const sessionChanged = Boolean(session);
+        setBusy(true, sessionChanged ? "Switching session to match your current setup..." : "Starting session...");
+        try {
+          session = await createSessionFromCurrentSelection();
+          applyWorkspaceSelection(session.cwd);
+          resetTranscript(false);
+          appendMessage(
+            "system",
+            `${sessionChanged ? "Session switched." : "Session started."}\nProvider: ${session.provider}\nModel: ${session.model}\nWorkspace: ${session.cwd}`,
+          );
+          updateSessionBadge("live", `${session.provider} live`);
+          focusCopyEl.textContent = `Active session: ${session.provider} on ${session.model}. This workspace is now the live context for prompts and tool runs.`;
+          metricTurnCountEl.textContent = String(session.turns || 0);
+          syncSignals();
+          await loadWorkspaceTree(true);
+          await refreshSessions();
+          addActivity(
+            sessionChanged ? "Session switched" : "Session started",
+            `${session.provider} · ${session.model}`,
+            "info",
+          );
+        } catch (error) {
+          setStatus(error.message || String(error), true);
+          addActivity(sessionChanged ? "Session switch failed" : "Session start failed", error.message || String(error), "error");
+          setBusy(false);
+          return;
+        }
+
+        setBusy(false);
       }
 
       const prompt = promptEl.value.trim();
@@ -4096,11 +4224,34 @@
       latestWrittenWorkspaceFile = null;
 
       const startedAt = performance.now();
+      const abortController = new AbortController();
+      let streamTimeoutId = null;
+      let streamStarted = false;
+
+      const clearStreamTimeout = () => {
+        if (streamTimeoutId) {
+          window.clearTimeout(streamTimeoutId);
+          streamTimeoutId = null;
+        }
+      };
+
+      const armStreamTimeout = (duration, message) => {
+        clearStreamTimeout();
+        streamTimeoutId = window.setTimeout(() => {
+          abortController.abort(new Error(message));
+        }, duration);
+      };
 
       try {
+        armStreamTimeout(
+          INITIAL_STREAM_EVENT_TIMEOUT_MS,
+          "Claw Dev did not receive any stream events for this prompt. The request may not have started cleanly. Please retry.",
+        );
+
         const response = await fetch(`/api/sessions/${session.id}/messages/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: abortController.signal,
           body: JSON.stringify({ prompt: promptText, attachments }),
         });
 
@@ -4116,6 +4267,12 @@
         let streamedText = "";
 
         await readNdjsonStream(response.body, (event) => {
+          streamStarted = true;
+          armStreamTimeout(
+            ACTIVE_STREAM_IDLE_TIMEOUT_MS,
+            "Claw Dev stopped receiving model updates and cancelled the request. Please retry or switch models if it keeps happening.",
+          );
+
           if (event.type === "status") {
             setStatus(event.message || "Running...", false);
             return;
@@ -4157,6 +4314,7 @@
           }
         });
 
+        clearStreamTimeout();
         finalizeStreamingAssistantMessage(streamingMessageEl, streamedText || "(empty response)");
         streamingMessageEl = null;
         let responseStatusMessage = "Response complete.";
@@ -4189,14 +4347,24 @@
         addActivity("Response complete", `${Math.round(performance.now() - startedAt)} ms · ${session?.turns || 0} turns in this session`, "success");
         await refreshSessions();
       } catch (error) {
+        clearStreamTimeout();
         if (streamingMessageEl) {
           streamingMessageEl.remove();
           streamingMessageEl = null;
         }
-        appendMessage("system", error.message || String(error));
-        setStatus(error.message || String(error), true);
+
+        let detail = error?.message || String(error);
+        if (error?.name === "AbortError") {
+          detail = streamStarted
+            ? "Claw Dev stopped receiving model updates and cancelled the request. Please retry or switch models if it keeps happening."
+            : "Claw Dev did not receive any stream events for this prompt. The request may not have started cleanly. Please retry.";
+        }
+
+        appendMessage("system", detail);
+        setStatus(detail, true);
         updateSessionBadge("live", `${session.provider} live`);
-        addActivity("Prompt failed", error.message || String(error), "error");
+        addActivity("Prompt failed", detail, "error");
+        await refreshSessions();
       } finally {
         setBusy(false);
       }
@@ -5363,10 +5531,8 @@
           session = next;
           providerEl.value = next.provider;
           populateModelSelect(getSelectedProviderMeta());
-          modelEl.value = next.model;
-          modelSelectEl.value = next.model;
-          cwdEl.value = next.cwd;
-          modelEl.dataset.touched = "true";
+          applyModelSelection(next.provider, next.model, true);
+          applyWorkspaceSelection(next.cwd);
           updateSessionBadge("live", `${next.provider} live`);
           setStatus("Session resumed. The server-side conversation is still live.", false);
           focusCopyEl.textContent = "A stored in-memory session is now active again. The server still has its conversation context, even though the local transcript panel only shows messages from this browser view.";
@@ -5668,6 +5834,9 @@
         }
 
         inputEl.value = payload.path;
+        if (inputEl === cwdEl) {
+          persistWorkspaceSelection(payload.path);
+        }
         syncSignals();
         if (inputEl === cwdEl) {
           await loadWorkspaceTree(true);

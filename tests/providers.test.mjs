@@ -127,8 +127,68 @@ test("OpenRouterProvider surfaces HTTP error details", async () => {
 
     await assert.rejects(
       () => provider.runTurn("hello"),
-      /OpenRouter request failed with status 429: rate limit exceeded/i,
+      /OpenRouter rate-limited model "anthropic\/claude-sonnet-4"/i,
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("OpenRouterProvider retries free models through the free router after a 429", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init });
+    const requestBody = JSON.parse(init.body);
+
+    if (calls.length === 1) {
+      assert.equal(requestBody.model, "qwen/qwen3-coder:free");
+      return new Response(
+        JSON.stringify({
+          error: {
+            message: "Provider returned error",
+            metadata: {
+              raw: "qwen/qwen3-coder:free is temporarily rate-limited upstream.",
+            },
+          },
+        }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    assert.equal(requestBody.model, "openrouter/free");
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: "hello from fallback router",
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  };
+
+  try {
+    const provider = new OpenRouterProvider({
+      apiKey: "or-test-key",
+      model: "qwen/qwen3-coder:free",
+      cwd: process.cwd(),
+      baseUrl: "https://openrouter.ai/api/v1",
+    });
+
+    const result = await provider.runTurn("hello");
+    assert.equal(result.text, "hello from fallback router");
+    assert.equal(calls.length, 2);
   } finally {
     globalThis.fetch = originalFetch;
   }

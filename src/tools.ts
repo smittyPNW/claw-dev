@@ -89,14 +89,103 @@ async function runShell(input: Record<string, unknown>, cwd: string): Promise<To
   if (typeof input.command !== "string" || input.command.length === 0) {
     throw new Error("command is required");
   }
-  const { stdout, stderr } = await execAsync(input.command, {
-    cwd,
-    shell: defaultShell(),
-    windowsHide: true,
-    maxBuffer: 1024 * 1024,
-  });
-  const content = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
-  return { content: content || "(command produced no output)" };
+
+  try {
+    const { stdout, stderr } = await execShell(input.command, cwd);
+    const content = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
+    return { content: content || "(command produced no output)" };
+  } catch (error) {
+    const normalizedError = error as {
+      stdout?: unknown;
+      stderr?: unknown;
+      signal?: unknown;
+      code?: unknown;
+    };
+    const stdout = typeof normalizedError.stdout === "string" ? normalizedError.stdout.trim() : "";
+    const stderr = typeof normalizedError.stderr === "string" ? normalizedError.stderr.trim() : "";
+    const signal = typeof normalizedError.signal === "string" ? normalizedError.signal : "";
+    const code =
+      typeof normalizedError.code === "number" || typeof normalizedError.code === "string"
+        ? String(normalizedError.code)
+        : "";
+
+    const parts = [];
+    if (code) {
+      parts.push(`Exit code: ${code}`);
+    }
+    if (signal) {
+      parts.push(`Signal: ${signal}`);
+    }
+    if (stdout) {
+      parts.push(`STDOUT:\n${stdout}`);
+    }
+    if (stderr) {
+      parts.push(`STDERR:\n${stderr}`);
+    }
+
+    return {
+      isError: true,
+      content: parts.join("\n\n") || "Command failed with no output.",
+    };
+  }
+}
+
+async function execShell(command: string, cwd: string) {
+  try {
+    return await execAsync(command, {
+      cwd,
+      shell: defaultShell(),
+      windowsHide: true,
+      maxBuffer: 1024 * 1024,
+      timeout: 120000,
+    });
+  } catch (error) {
+    const normalizedError = error as { stderr?: unknown };
+    const stderr = typeof normalizedError.stderr === "string" ? normalizedError.stderr : "";
+
+    const fallbackCommand = rewriteMissingCommand(command, stderr);
+    if (fallbackCommand) {
+      return execAsync(fallbackCommand, {
+        cwd,
+        shell: defaultShell(),
+        windowsHide: true,
+        maxBuffer: 1024 * 1024,
+        timeout: 120000,
+      });
+    }
+
+    throw error;
+  }
+}
+
+function rewriteMissingCommand(command: string, stderr: string): string | null {
+  if (shouldRetryWithPythonPip(command, stderr)) {
+    return rewritePipCommand(command);
+  }
+
+  if (shouldRetryWithPython3(command, stderr)) {
+    return rewritePythonCommand(command);
+  }
+
+  return null;
+}
+
+function shouldRetryWithPythonPip(command: string, stderr: string): boolean {
+  const trimmed = command.trim();
+  return /^pip(?:\s|$)/.test(trimmed) && /command not found:\s*pip/i.test(stderr);
+}
+
+function rewritePipCommand(command: string): string {
+  return command.replace(/^pip(?=\s|$)/, "python3 -m pip");
+}
+
+function shouldRetryWithPython3(command: string, stderr: string): boolean {
+  const trimmed = command.trim();
+  return /^python(?:\s|$)/.test(trimmed) && /command not found:\s*python/i.test(stderr);
+}
+
+function rewritePythonCommand(command: string): string {
+  return command.replace(/^python(?=\s|$)/, "python3");
 }
 
 function defaultShell(): string {

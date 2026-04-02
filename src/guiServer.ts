@@ -160,6 +160,7 @@ const workspaceProcesses = new Map<string, WorkspaceProcessRecord>();
 const workspaceTerminals = new Map<string, WorkspaceTerminalRecord>();
 
 const GUI_PORT = Number(process.env.CLAW_GUI_PORT || "4310");
+const TURN_STREAM_TIMEOUT_MS = Number(process.env.CLAW_TURN_TIMEOUT_MS || "300000");
 const execFileAsync = promisify(execFile);
 const execAsync = promisify(exec);
 startOpenRouterHeartbeat();
@@ -776,12 +777,21 @@ async function streamTurn(
   };
 
   try {
-    const result = await session.agent.runTurn(prompt, attachments, (event) => {
-      send(event);
-    });
+    session.lastPrompt = prompt;
+    session.updatedAt = new Date().toISOString();
+
+    const result = await Promise.race([
+      session.agent.runTurn(prompt, attachments, (event) => {
+        send(event);
+      }),
+      delay(TURN_STREAM_TIMEOUT_MS).then(() => {
+        throw new Error(
+          "Claw Dev cancelled the request because the turn took too long to finish. Please retry, narrow the task, or switch models if this keeps happening.",
+        );
+      }),
+    ]);
 
     session.turns += 1;
-    session.lastPrompt = prompt;
     session.updatedAt = new Date().toISOString();
 
     await streamText(send, result.text || "(empty response)");

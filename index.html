@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Claw Dev Control Room</title>
+  <link rel="stylesheet" href="/node_modules/xterm/css/xterm.css">
   <style>
     :root {
       --bg: #0b1018;
@@ -23,6 +24,11 @@
       --success: #6fd6a5;
       --warning: #f3b35d;
       --danger: #ff8d73;
+      --electric: #7aa8ff;
+      --electric-soft: rgba(122, 168, 255, 0.18);
+      --teal: #61d8d6;
+      --teal-soft: rgba(97, 216, 214, 0.14);
+      --violet-soft: rgba(160, 124, 255, 0.16);
       --radius-xl: 32px;
       --radius-lg: 24px;
       --radius-md: 18px;
@@ -46,8 +52,9 @@
       font-family: var(--font-body);
       color: var(--ink);
       background:
-        radial-gradient(circle at 0% 0%, rgba(243, 153, 98, 0.2), transparent 28%),
-        radial-gradient(circle at 100% 0%, rgba(81, 123, 255, 0.12), transparent 26%),
+        radial-gradient(circle at 0% 0%, rgba(243, 153, 98, 0.22), transparent 28%),
+        radial-gradient(circle at 100% 0%, rgba(81, 123, 255, 0.16), transparent 26%),
+        radial-gradient(circle at 50% 100%, rgba(97, 216, 214, 0.08), transparent 34%),
         linear-gradient(180deg, #06090f 0%, #0b1018 42%, #101826 100%);
     }
 
@@ -62,6 +69,19 @@
       background-size: 48px 48px;
       mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 82%);
       opacity: 0.24;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 16% 24%, rgba(243, 153, 98, 0.1), transparent 18%),
+        radial-gradient(circle at 84% 16%, rgba(122, 168, 255, 0.1), transparent 18%),
+        radial-gradient(circle at 70% 72%, rgba(97, 216, 214, 0.08), transparent 22%);
+      filter: blur(36px);
+      opacity: 0.85;
     }
 
     .shell {
@@ -79,6 +99,19 @@
       background: var(--panel);
       box-shadow: var(--shadow);
       backdrop-filter: blur(22px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 18%),
+        radial-gradient(circle at top right, rgba(255, 143, 84, 0.08), transparent 30%);
+      opacity: 0.72;
     }
 
     .sidebar {
@@ -350,11 +383,14 @@
       border-radius: 999px;
       padding: 7px 11px;
       border: 1px solid rgba(255, 255, 255, 0.1);
-      background: rgba(255, 255, 255, 0.06);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.04)),
+        radial-gradient(circle at top left, rgba(255, 143, 84, 0.08), transparent 42%);
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
     }
 
     .status-configured {
@@ -448,12 +484,25 @@
     }
 
     .command-list button {
-      background: rgba(255, 255, 255, 0.05);
+      min-height: 54px;
+      background:
+        radial-gradient(circle at top left, rgba(255, 143, 84, 0.08), transparent 36%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
       border: 1px solid rgba(255, 255, 255, 0.08);
       color: var(--ink);
-      padding: 10px 12px;
+      padding: 12px 14px;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      text-align: left;
+      justify-content: flex-start;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .shortcut-helper {
+      margin: -2px 0 0;
+      color: rgba(224, 230, 242, 0.58);
+      font-size: 12px;
     }
 
     .model-spotlight {
@@ -604,9 +653,9 @@
     }
 
     .model-spotlight-head {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: start;
-      justify-content: space-between;
       gap: 12px;
     }
 
@@ -625,6 +674,8 @@
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: 320px;
     }
 
     .spotlight-badge {
@@ -639,6 +690,7 @@
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
+      white-space: nowrap;
     }
 
     .spotlight-badge.free {
@@ -767,6 +819,50 @@
       gap: 16px;
     }
 
+    .workspace-studio-grid {
+      align-items: start;
+    }
+
+    .workspace-studio-panel {
+      min-width: 0;
+    }
+
+    .workspace-studio-side {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .workspace-meta-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .workspace-meta-card {
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .workspace-meta-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255, 161, 103, 0.84);
+    }
+
+    .workspace-meta-card span,
+    .workspace-meta-card code,
+    .workspace-meta-card p {
+      margin: 0;
+      color: rgba(238, 242, 250, 0.82);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
     .workspace-panel {
       padding: 18px;
       background: rgba(255, 248, 240, 0.94);
@@ -853,14 +949,12 @@
     }
 
     .message.assistant.streaming .message-body::after {
-      content: "";
+      content: "🦀";
       display: inline-block;
-      width: 9px;
-      height: 1.1em;
-      margin-left: 4px;
-      vertical-align: -2px;
-      background: rgba(217, 114, 66, 0.72);
-      animation: caretBlink 1s steps(1) infinite;
+      margin-left: 8px;
+      vertical-align: -1px;
+      transform-origin: center bottom;
+      animation: crabScoot 1.15s ease-in-out infinite;
     }
 
     .message.system {
@@ -955,6 +1049,184 @@
       overflow: auto;
     }
 
+    .studio-shell {
+      grid-template-columns: 248px minmax(0, 1fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .studio-rail,
+    .studio-main {
+      gap: 14px;
+    }
+
+    .studio-panel {
+      padding: 16px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.015)),
+        radial-gradient(circle at top right, rgba(243, 153, 98, 0.06), transparent 34%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+    }
+
+    .studio-panel .section-head {
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .file-tree {
+      max-height: 460px;
+      overflow: auto;
+      display: grid;
+      gap: 2px;
+      padding-right: 4px;
+    }
+
+    .tree-row {
+      min-height: 34px;
+      padding: 7px 10px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: rgba(238, 242, 250, 0.82);
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .tree-row:hover {
+      background: rgba(255, 255, 255, 0.045);
+      border-color: rgba(255, 255, 255, 0.06);
+    }
+
+    .tree-row.active {
+      background: linear-gradient(135deg, rgba(217, 114, 66, 0.16), rgba(255, 255, 255, 0.03));
+      border-color: rgba(243, 153, 98, 0.28);
+      color: #fff7ef;
+    }
+
+    .tree-children {
+      padding-left: 12px;
+    }
+
+    .tree-children[hidden] {
+      display: none;
+    }
+
+    .tree-caret {
+      width: 12px;
+      color: rgba(224, 230, 242, 0.54);
+      flex: 0 0 12px;
+    }
+
+    .editor-stage,
+    .studio-main {
+      gap: 14px;
+    }
+
+    .editor-toolbar,
+    .runner-toolbar {
+      align-items: start;
+    }
+
+    .editor-toolbar h3,
+    .runner-toolbar h3 {
+      font-size: 18px;
+    }
+
+    .editor-toolbar code,
+    .runner-toolbar code {
+      display: block;
+      margin-top: 4px;
+      color: rgba(224, 230, 242, 0.56);
+      font-size: 12px;
+    }
+
+    .editor-textarea {
+      min-height: 540px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        linear-gradient(180deg, rgba(13, 18, 27, 0.96), rgba(9, 13, 20, 0.98));
+      color: #eef2fa;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+    }
+
+    .runner-command {
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      color: #eef2fa;
+    }
+
+    .runner-log {
+      min-height: 260px;
+      max-height: 360px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at top right, rgba(217, 114, 66, 0.08), transparent 34%),
+        linear-gradient(180deg, #0a0f17, #070b11);
+      color: #dfe8f6;
+    }
+
+    .workspace-panel .studio-empty {
+      color: rgba(224, 230, 242, 0.56);
+      font-size: 13px;
+    }
+
+    .studio-panel {
+      border-radius: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .studio-panel h3 {
+      color: #eef2fa;
+      font-size: 16px;
+    }
+
+    .studio-panel code,
+    .studio-panel .helper,
+    .studio-panel label,
+    .studio-empty {
+      color: rgba(224, 230, 242, 0.68);
+    }
+
+    .tree-row {
+      border: 1px solid transparent;
+      color: rgba(239, 242, 248, 0.88);
+    }
+
+    .tree-row:hover,
+    .tree-row.active {
+      background: rgba(255, 255, 255, 0.055);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .editor-textarea,
+    .runner-command {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(255, 255, 255, 0.08);
+      color: #eef2fa;
+    }
+
+    .editor-textarea:focus,
+    .runner-command:focus {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(243, 153, 98, 0.72);
+    }
+
+    .runner-log {
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      background:
+        radial-gradient(circle at top right, rgba(217, 114, 66, 0.08), transparent 34%),
+        linear-gradient(180deg, #0d121b, #090d14);
+      color: #dfe8f6;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
     .activity-item {
       padding: 14px;
       background: rgba(18, 22, 28, 0.03);
@@ -992,6 +1264,127 @@
       font-size: 12px;
     }
 
+    .input-action-row {
+      display: grid;
+      gap: 8px;
+    }
+
+    .input-action-row .button-row {
+      margin-top: 0;
+    }
+
+    .studio-shell {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .studio-rail {
+      display: grid;
+      gap: 14px;
+    }
+
+    .studio-panel {
+      border: 1px solid rgba(18, 22, 28, 0.08);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.58);
+      padding: 14px;
+    }
+
+    .file-tree,
+    .runner-log {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .tree-row {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      padding: 8px 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font: inherit;
+    }
+
+    .tree-row:hover,
+    .tree-row.active {
+      background: rgba(18, 22, 28, 0.06);
+    }
+
+    .tree-children {
+      list-style: none;
+      margin: 0;
+      padding: 0 0 0 14px;
+    }
+
+    .studio-main {
+      display: grid;
+      gap: 18px;
+    }
+
+    .editor-stage {
+      display: grid;
+      gap: 12px;
+    }
+
+    .editor-toolbar,
+    .runner-toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .editor-toolbar code,
+    .runner-toolbar code {
+      color: rgba(18, 22, 28, 0.6);
+    }
+
+    .editor-textarea,
+    .runner-command {
+      width: 100%;
+      border-radius: 16px;
+      border: 1px solid rgba(18, 22, 28, 0.12);
+      background: rgba(255, 255, 255, 0.82);
+      color: #12161c;
+      padding: 14px 16px;
+      font: 13px/1.55 "IBM Plex Mono", "SFMono-Regular", monospace;
+      resize: vertical;
+      min-height: 420px;
+    }
+
+    .runner-command {
+      min-height: 0;
+      font-size: 14px;
+      padding: 12px 14px;
+    }
+
+    .runner-log {
+      border-radius: 16px;
+      border: 1px solid rgba(18, 22, 28, 0.08);
+      background: #0d1117;
+      color: #d7e1ee;
+      padding: 16px;
+      font: 12px/1.6 "IBM Plex Mono", "SFMono-Regular", monospace;
+      min-height: 220px;
+      white-space: pre-wrap;
+      overflow: auto;
+    }
+
+    .studio-empty {
+      margin: 0;
+      color: rgba(18, 22, 28, 0.58);
+    }
+
     .sr-only {
       position: absolute;
       width: 1px;
@@ -1021,6 +1414,15 @@
       50% { transform: translateY(-6px) scale(1.01); }
     }
 
+    @keyframes crestFloat {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg) scale(1);
+      }
+      50% {
+        transform: translateY(-4px) rotate(2deg) scale(1.03);
+      }
+    }
+
     @keyframes fadeSlide {
       from {
         opacity: 0;
@@ -1038,6 +1440,25 @@
       }
       46%, 100% {
         opacity: 0;
+      }
+    }
+
+    @keyframes crabScoot {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg) scale(1);
+        opacity: 0.9;
+      }
+      25% {
+        transform: translateY(-1px) rotate(-8deg) scale(1.02);
+        opacity: 1;
+      }
+      50% {
+        transform: translateY(0) rotate(6deg) scale(0.98);
+        opacity: 0.95;
+      }
+      75% {
+        transform: translateY(-1px) rotate(-4deg) scale(1.02);
+        opacity: 1;
       }
     }
 
@@ -1195,10 +1616,14 @@
       padding: 16px 18px;
       border-radius: 26px;
       background:
-        linear-gradient(180deg, rgba(10, 14, 21, 0.98), rgba(11, 15, 23, 0.98)),
-        radial-gradient(circle at top left, rgba(255, 122, 61, 0.08), transparent 24%);
+        radial-gradient(circle at top left, rgba(255, 122, 61, 0.12), transparent 22%),
+        radial-gradient(circle at top right, rgba(76, 119, 255, 0.08), transparent 26%),
+        linear-gradient(180deg, rgba(10, 14, 21, 0.985), rgba(11, 15, 23, 0.985));
       display: grid;
       gap: 14px;
+      box-shadow:
+        0 24px 64px rgba(0, 0, 0, 0.26),
+        inset 0 1px 0 rgba(255, 255, 255, 0.035);
     }
 
     .setup-grid {
@@ -1228,8 +1653,12 @@
       align-items: center;
       border-radius: 28px;
       background:
-        linear-gradient(180deg, rgba(9, 13, 20, 0.98), rgba(10, 14, 21, 0.98)),
-        radial-gradient(circle at top left, rgba(255, 122, 61, 0.12), transparent 24%);
+        radial-gradient(circle at top left, rgba(255, 122, 61, 0.18), transparent 24%),
+        radial-gradient(circle at top right, rgba(76, 119, 255, 0.12), transparent 26%),
+        linear-gradient(180deg, rgba(9, 13, 20, 0.985), rgba(10, 14, 21, 0.985));
+      box-shadow:
+        0 28px 84px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.045);
     }
 
     .masthead-copy {
@@ -1238,10 +1667,72 @@
       align-content: center;
     }
 
+    .headline-lockup {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
     .masthead h2 {
       font-size: clamp(22px, 2.3vw, 34px);
       max-width: 20ch;
       letter-spacing: -0.05em;
+      margin: 0;
+    }
+
+    .headline-crest {
+      position: relative;
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background:
+        radial-gradient(circle at top left, rgba(255, 143, 84, 0.2), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(76, 119, 255, 0.14), transparent 30%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
+      box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.24),
+        0 0 36px rgba(243, 153, 98, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      isolation: isolate;
+      animation: crestFloat 5.8s ease-in-out infinite;
+    }
+
+    .headline-crest::before {
+      content: "";
+      position: absolute;
+      inset: -22% -18%;
+      border-radius: 24px;
+      background: radial-gradient(circle, rgba(255, 143, 84, 0.22), transparent 62%);
+      filter: blur(16px);
+      opacity: 0.85;
+      z-index: 0;
+    }
+
+    .headline-crest::after {
+      content: "";
+      position: absolute;
+      inset: 18% 18%;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      opacity: 0.45;
+      z-index: 0;
+    }
+
+    .headline-mark {
+      position: relative;
+      z-index: 1;
+      width: 42px;
+      height: 42px;
+      object-fit: cover;
+      border-radius: 12px;
+      filter: saturate(1.04) contrast(1.03);
     }
 
     .masthead-copy p {
@@ -1249,6 +1740,56 @@
       font-size: 12px;
       color: rgba(232, 236, 244, 0.64);
       margin: 0;
+    }
+
+    .onboarding-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .onboarding-step {
+      padding: 12px 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at top left, rgba(255, 143, 84, 0.12), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(76, 119, 255, 0.08), transparent 30%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0.02));
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.03),
+        0 16px 30px rgba(0, 0, 0, 0.12);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .onboarding-step::after {
+      content: "";
+      position: absolute;
+      inset: auto -14% -48% 34%;
+      height: 90px;
+      background: radial-gradient(circle, rgba(122, 168, 255, 0.12), transparent 64%);
+      filter: blur(16px);
+      pointer-events: none;
+    }
+
+    .onboarding-step strong {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      color: #fff7ef;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .onboarding-step span {
+      display: block;
+      color: rgba(230, 233, 242, 0.68);
+      font-size: 12px;
+      line-height: 1.5;
     }
 
     .metric-row {
@@ -1262,8 +1803,24 @@
       min-width: 128px;
       padding: 10px 12px;
       border-radius: 16px;
-      background: rgba(255, 255, 255, 0.035);
+      background:
+        radial-gradient(circle at top left, rgba(255, 143, 84, 0.08), transparent 34%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
       border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric::after {
+      content: "";
+      position: absolute;
+      inset: auto -20% -50% auto;
+      width: 120px;
+      height: 120px;
+      background: radial-gradient(circle, rgba(255, 143, 84, 0.14), transparent 64%);
+      filter: blur(18px);
+      pointer-events: none;
     }
 
     .metric strong {
@@ -1295,6 +1852,27 @@
       border-color: rgba(255, 255, 255, 0.07);
     }
 
+    .workspace-grid > .workspace-panel:first-child {
+      background:
+        radial-gradient(circle at top left, rgba(255, 143, 84, 0.14), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(69, 122, 255, 0.06), transparent 26%),
+        linear-gradient(180deg, rgba(13, 18, 27, 0.99), rgba(9, 13, 20, 0.98));
+      box-shadow:
+        0 26px 72px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .workspace-grid > aside.workspace-panel {
+      background:
+        radial-gradient(circle at top right, rgba(84, 132, 255, 0.18), transparent 28%),
+        radial-gradient(circle at 18% 82%, rgba(255, 143, 84, 0.1), transparent 24%),
+        radial-gradient(circle at 80% 60%, rgba(97, 216, 214, 0.08), transparent 20%),
+        linear-gradient(180deg, rgba(10, 14, 22, 0.985), rgba(8, 12, 19, 0.985));
+      box-shadow:
+        0 24px 64px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    }
+
     .workspace-panel .eyebrow {
       color: rgba(255, 161, 103, 0.84);
     }
@@ -1323,8 +1901,10 @@
     }
 
     .chip {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.07);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.028)),
+        radial-gradient(circle at top left, rgba(122, 168, 255, 0.08), transparent 40%);
+      border-color: rgba(255, 255, 255, 0.08);
       color: rgba(227, 232, 242, 0.72);
     }
 
@@ -1343,8 +1923,11 @@
       border-radius: 22px;
       border: 1px solid rgba(255, 255, 255, 0.06);
       background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        radial-gradient(circle at top, rgba(255, 158, 92, 0.08), transparent 30%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        inset 0 -18px 48px rgba(0, 0, 0, 0.18);
     }
 
     .message {
@@ -1377,6 +1960,36 @@
       color: rgba(239, 242, 248, 0.92);
     }
 
+    .message-body pre {
+      margin: 14px 0 0;
+      padding: 14px 15px;
+      border-radius: 16px;
+      overflow: auto;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(6, 13, 21, 0.78);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .message-body code {
+      font-family: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+      font-size: 12.5px;
+    }
+
+    .message-action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .message-action-note {
+      flex-basis: 100%;
+      font-size: 12px;
+      color: rgba(223, 230, 242, 0.58);
+    }
+
     .empty {
       min-height: 44vh;
       border: 1px dashed rgba(255, 255, 255, 0.1);
@@ -1396,7 +2009,81 @@
 
     .composer textarea {
       min-height: 112px;
-      background: rgba(255, 255, 255, 0.03);
+      background:
+        radial-gradient(circle at top left, rgba(255, 143, 84, 0.09), transparent 28%),
+        radial-gradient(circle at top right, rgba(122, 168, 255, 0.07), transparent 24%),
+        rgba(255, 255, 255, 0.03);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.03),
+        inset 0 -18px 36px rgba(0, 0, 0, 0.1),
+        0 0 0 1px rgba(255, 255, 255, 0.02);
+    }
+
+    .composer-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 6px 0 2px;
+    }
+
+    .session-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.018)),
+        radial-gradient(circle at top left, rgba(122, 168, 255, 0.08), transparent 44%);
+    }
+
+    .session-controls .ghost,
+    .composer-send-group .secondary {
+      min-width: 124px;
+    }
+
+    .session-controls .ghost {
+      background: rgba(255, 255, 255, 0.045);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .composer-send-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      padding: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 18px;
+      background:
+        radial-gradient(circle at top left, rgba(255, 143, 84, 0.08), transparent 34%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.018));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .composer-send-group::after {
+      content: "";
+      position: absolute;
+      inset: auto -8% -60% 24%;
+      height: 110px;
+      background: radial-gradient(circle, rgba(243, 153, 98, 0.16), transparent 64%);
+      filter: blur(18px);
+      pointer-events: none;
+    }
+
+    .composer-send-group .primary {
+      min-width: 152px;
+      box-shadow:
+        0 18px 36px rgba(217, 114, 66, 0.18),
+        0 0 0 1px rgba(255, 191, 145, 0.08) inset,
+        0 0 42px rgba(243, 153, 98, 0.14);
     }
 
     .status-line {
@@ -1405,9 +2092,12 @@
     }
 
     .live-badge {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.08);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03)),
+        radial-gradient(circle at top left, rgba(97, 216, 214, 0.08), transparent 42%);
+      border-color: rgba(255, 255, 255, 0.09);
       color: rgba(237, 242, 249, 0.8);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
 
     .dot {
@@ -1416,18 +2106,308 @@
 
     .activity-list {
       max-height: 480px;
-      padding-right: 4px;
+      padding-right: 6px;
     }
 
     .activity-item {
       padding: 12px;
-      background: rgba(255, 255, 255, 0.03);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+        radial-gradient(circle at top right, rgba(122, 168, 255, 0.08), transparent 32%);
       border-color: rgba(255, 255, 255, 0.07);
       border-radius: 18px;
+      backdrop-filter: blur(10px);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.02),
+        0 12px 30px rgba(0, 0, 0, 0.12);
+    }
+
+    .activity-item.kind-success {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+        radial-gradient(circle at top right, rgba(111, 214, 165, 0.12), transparent 34%);
+    }
+
+    .activity-item.kind-error {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+        radial-gradient(circle at top right, rgba(255, 141, 115, 0.12), transparent 34%);
+    }
+
+    .activity-item.kind-tool {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+        radial-gradient(circle at top right, rgba(243, 179, 93, 0.12), transparent 34%);
     }
 
     .activity-time {
       color: rgba(224, 230, 242, 0.42);
+    }
+
+    .workspace-studio-panel .studio-panel {
+      border-radius: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.018)),
+        radial-gradient(circle at top right, rgba(243, 153, 98, 0.05), transparent 38%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .workspace-studio-panel .tree-row {
+      color: rgba(239, 242, 248, 0.88);
+    }
+
+    .workspace-studio-panel .tree-row:hover,
+    .workspace-studio-panel .tree-row.active {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .workspace-studio-panel .editor-textarea,
+    .workspace-studio-panel .runner-command {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(255, 255, 255, 0.08);
+      color: #eef2fa;
+    }
+
+    .workspace-studio-panel .editor-textarea {
+      min-height: 520px;
+    }
+
+    .workspace-studio-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) 280px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .workspace-studio-panel,
+    .workspace-studio-panel *,
+    .workspace-studio-side,
+    .workspace-studio-side * {
+      box-sizing: border-box;
+    }
+
+    .workspace-studio-panel {
+      min-width: 0;
+      padding: 18px;
+      border-radius: 30px;
+      background:
+        radial-gradient(circle at top left, rgba(255, 143, 84, 0.12), transparent 20%),
+        radial-gradient(circle at top right, rgba(63, 102, 255, 0.11), transparent 28%),
+        linear-gradient(180deg, rgba(12, 16, 24, 0.99), rgba(9, 13, 20, 0.985));
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      box-shadow:
+        0 28px 80px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    }
+
+    .workspace-studio-panel .studio-shell {
+      display: grid;
+      grid-template-columns: 256px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+      min-width: 0;
+    }
+
+    .workspace-studio-panel .studio-rail,
+    .workspace-studio-panel .studio-main {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+      align-content: start;
+    }
+
+    .workspace-studio-panel .studio-output-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.9fr);
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .workspace-studio-panel .studio-panel {
+      min-width: 0;
+      overflow: hidden;
+      padding: 16px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      background:
+        radial-gradient(circle at top right, rgba(243, 153, 98, 0.07), transparent 34%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0.018));
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.03),
+        inset 0 -14px 28px rgba(0, 0, 0, 0.08),
+        0 18px 40px rgba(0, 0, 0, 0.12);
+    }
+
+    .workspace-studio-panel .section-head,
+    .workspace-studio-panel .editor-toolbar,
+    .workspace-studio-panel .runner-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .workspace-studio-panel .editor-toolbar,
+    .workspace-studio-panel .runner-toolbar {
+      align-items: flex-start;
+    }
+
+    .workspace-studio-panel .file-tree {
+      max-height: 420px;
+      overflow: auto;
+      display: grid;
+      gap: 4px;
+      margin: 0;
+      padding: 0 4px 0 0;
+      list-style: none;
+      scrollbar-width: thin;
+    }
+
+    .workspace-studio-panel .tree-children {
+      list-style: none;
+      margin: 0;
+      padding: 4px 0 0 16px;
+    }
+
+    .workspace-studio-panel .tree-row {
+      width: 100%;
+      min-height: 34px;
+      padding: 7px 10px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: rgba(239, 242, 248, 0.88);
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font: inherit;
+    }
+
+    .workspace-studio-panel .tree-row:hover,
+    .workspace-studio-panel .tree-row.active {
+      background:
+        linear-gradient(135deg, rgba(255, 143, 84, 0.12), rgba(72, 112, 255, 0.08));
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .workspace-studio-panel .editor-stage {
+      display: grid;
+      gap: 12px;
+    }
+
+    .workspace-studio-panel .editor-textarea,
+    .workspace-studio-panel .runner-command {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .workspace-studio-panel .editor-textarea {
+      min-height: 520px;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at top right, rgba(77, 119, 255, 0.08), transparent 26%),
+        linear-gradient(180deg, rgba(13, 18, 27, 0.965), rgba(9, 13, 20, 0.985));
+      color: #eef2fa;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.025),
+        inset 0 -24px 44px rgba(0, 0, 0, 0.14),
+        0 0 0 1px rgba(255, 255, 255, 0.02);
+      resize: vertical;
+    }
+
+    .workspace-studio-panel .runner-command {
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+      color: #eef2fa;
+    }
+
+    .workspace-studio-panel .runner-terminal-wrap,
+    .workspace-studio-panel .preview-frame-wrap {
+      position: relative;
+      min-height: 320px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      background:
+        radial-gradient(circle at top right, rgba(217, 114, 66, 0.1), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(73, 119, 255, 0.08), transparent 24%),
+        linear-gradient(180deg, #09111a, #060b12);
+      overflow: hidden;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.02),
+        0 16px 38px rgba(0, 0, 0, 0.14);
+    }
+
+    .workspace-studio-panel .runner-terminal {
+      height: 360px;
+      padding: 12px;
+    }
+
+    .workspace-studio-panel .runner-terminal .xterm-viewport {
+      border-radius: 10px;
+    }
+
+    .workspace-studio-panel .runner-terminal-empty,
+    .workspace-studio-panel .preview-empty {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      text-align: center;
+      color: rgba(224, 230, 242, 0.62);
+      font-size: 13px;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+
+    .workspace-studio-panel .preview-frame {
+      width: 100%;
+      height: 360px;
+      border: 0;
+      background: #0a1118;
+    }
+
+    .workspace-studio-panel .preview-panel {
+      display: grid;
+      gap: 12px;
+    }
+
+    .workspace-studio-panel code,
+    .workspace-studio-panel .helper,
+    .workspace-studio-panel label,
+    .workspace-studio-side code,
+    .workspace-studio-side .helper,
+    .workspace-studio-side p,
+    .workspace-studio-side span {
+      color: rgba(224, 230, 242, 0.72);
+    }
+
+    .workspace-studio-side {
+      position: sticky;
+      top: 18px;
+    }
+
+    .workspace-meta-card {
+      background:
+        radial-gradient(circle at top right, rgba(73, 119, 255, 0.11), transparent 32%),
+        radial-gradient(circle at bottom left, rgba(243, 153, 98, 0.08), transparent 28%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0.02));
+      border-color: rgba(255, 255, 255, 0.07);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.03),
+        0 14px 30px rgba(0, 0, 0, 0.12);
+    }
+
+    .workspace-meta-card strong {
+      color: rgba(255, 179, 126, 0.92);
     }
 
     @media (max-width: 1240px) {
@@ -1440,6 +2420,16 @@
       }
 
       .workspace-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .workspace-studio-panel .studio-shell,
+      .workspace-studio-panel .studio-output-grid,
+      .workspace-studio-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .workspace-studio-grid {
         grid-template-columns: 1fr;
       }
 
@@ -1492,6 +2482,16 @@
         font-size: 30px;
       }
 
+      .headline-mark {
+        width: 36px;
+        height: 36px;
+      }
+
+      .headline-crest {
+        width: 50px;
+        height: 50px;
+      }
+
       .command-list {
         grid-template-columns: 1fr;
       }
@@ -1504,11 +2504,32 @@
         grid-template-columns: 1fr;
       }
 
+      .onboarding-strip {
+        grid-template-columns: 1fr;
+      }
+
       .setup-actions {
         justify-content: stretch;
       }
 
       .workspace-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .composer-actions {
+        align-items: stretch;
+      }
+
+      .session-controls,
+      .composer-send-group {
+        width: 100%;
+      }
+
+      .composer-send-group {
+        justify-content: stretch;
+      }
+
+      .studio-shell {
         grid-template-columns: 1fr;
       }
 
@@ -1695,7 +2716,12 @@
                 </label>
                 <label>
                   Workspace
-                  <input id="telegram-cwd-input" type="text" placeholder="/path/to/project">
+                  <div class="input-action-row">
+                    <input id="telegram-cwd-input" type="text" placeholder="/path/to/project">
+                    <div class="button-row">
+                      <button class="ghost" id="pick-telegram-workspace" type="button">Choose Folder</button>
+                    </div>
+                  </div>
                 </label>
               </div>
             </div>
@@ -1744,7 +2770,27 @@
         <div class="masthead-copy">
           <div>
             <p class="eyebrow">Workspace</p>
-            <h2>Choose a Model and Code.</h2>
+            <div class="headline-lockup">
+              <h2>Choose a Model, Pick a Workspace, Vibe</h2>
+              <div class="headline-crest" aria-hidden="true">
+                <img class="headline-mark" src="/assets/gui/claw-dev-vibe-logo.jpg" alt="">
+              </div>
+            </div>
+          </div>
+
+          <div class="onboarding-strip">
+            <div class="onboarding-step">
+              <strong>1. Choose</strong>
+              <span>Pick the strongest model lane for the job, from ChatGPT Codex to OpenRouter or Ollama.</span>
+            </div>
+            <div class="onboarding-step">
+              <strong>2. Point</strong>
+              <span>Set the workspace folder so Claw Dev knows exactly where to read, write, run, and preview code.</span>
+            </div>
+            <div class="onboarding-step">
+              <strong>3. Vibe</strong>
+              <span>Start the session and keep the transcript, activity rail, and studio open while the agent builds.</span>
+            </div>
           </div>
 
           <div class="metric-row">
@@ -1790,13 +2836,15 @@
 
           <label>
             Workspace
-            <input id="cwd" type="text" placeholder="/path/to/repo">
+            <div class="input-action-row">
+              <input id="cwd" type="text" placeholder="/path/to/repo">
+              <div class="button-row">
+                <button class="ghost" id="pick-workspace" type="button">Choose Folder</button>
+                <button class="ghost" id="use-repo-workspace" type="button">Use This Repo</button>
+              </div>
+            </div>
           </label>
 
-          <div class="setup-actions">
-            <button class="primary" id="start-session">Start Session</button>
-            <button class="secondary" id="reset-session" disabled>Reset</button>
-          </div>
         </div>
 
         <div class="model-spotlight" id="model-spotlight">
@@ -1822,7 +2870,7 @@
           <div class="status-line">
             <div>
               <h3>Session Workspace</h3>
-              <p class="status-copy" id="status">Idle. Configure a provider and start a session to begin.</p>
+              <p class="status-copy" id="status">Idle. Pick a provider, choose a workspace, and start a coding session.</p>
             </div>
             <div class="live-badge" id="session-badge">
               <span class="dot"></span>
@@ -1841,7 +2889,7 @@
               <div class="empty" id="empty-state">
                 <div>
                   <h3>No active session yet.</h3>
-                  <p>Start a session above, then send a prompt. Responses and tool activity will appear here.</p>
+                  <p>Choose your model lane, point Claw Dev at a workspace, then start the session. The transcript, tool activity, and generated code will all show up here.</p>
                 </div>
               </div>
             </section>
@@ -1852,20 +2900,27 @@
                 <textarea id="prompt" placeholder="Inspect this repository and tell me where the OpenRouter flow is implemented."></textarea>
               </label>
 
-              <div class="button-row">
-                <button class="primary" id="send-message" disabled>Send Prompt</button>
-                <button class="secondary" id="clear-composer" type="button">Clear Draft</button>
+              <div class="composer-actions">
+                <div class="composer-send-group">
+                  <button class="primary" id="send-message" disabled>Send Prompt</button>
+                  <button class="secondary" id="clear-composer" type="button">Clear Draft</button>
+                </div>
+                <div class="session-controls">
+                  <button class="ghost" id="start-session">Start Session</button>
+                  <button class="ghost" id="reset-session" disabled type="button">Reset</button>
+                </div>
               </div>
 
               <div class="section">
                 <div class="section-head">
-                  <h3>Prompt Shortcuts</h3>
+                  <h3>Coding Shortcuts</h3>
                 </div>
+                <p class="shortcut-helper">Load a useful coding prompt instantly, then tweak it if you want before sending.</p>
                 <div class="command-list">
-                  <button type="button" data-template="Inspect this repository and summarize the main architecture.">Architecture</button>
-                  <button type="button" data-template="Find the OpenRouter implementation path and explain how requests flow through it.">OpenRouter flow</button>
-                  <button type="button" data-template="Review the current workspace for broken tests, weak spots, and cleanup opportunities.">Review workspace</button>
-                  <button type="button" data-template="Compare the browser GUI, terminal interface, and Telegram bot flows and summarize the gaps.">Compare paths</button>
+                  <button type="button" data-template="Inspect the current workspace, decide what files matter, and start building the requested feature with minimal back-and-forth.">Build feature</button>
+                  <button type="button" data-template="Inspect the workspace, identify the bug or broken behavior, fix it, and explain what changed.">Fix bug</button>
+                  <button type="button" data-template="Explain the currently relevant files, architecture, and control flow like a senior engineer onboarding me quickly.">Explain code</button>
+                  <button type="button" data-template="Review this workspace for bugs, regressions, risky assumptions, and missing tests. Prioritize real findings first.">Review code</button>
                 </div>
               </div>
             </section>
@@ -1885,19 +2940,161 @@
             <div class="section-head">
               <h3>Current Focus</h3>
             </div>
-            <p class="mini-copy" id="focus-copy">Select a provider, confirm a model, and start a session.</p>
+            <p class="mini-copy" id="focus-copy">Pick the best model lane for the task, point it at the right workspace, and start the session. Once it is live, keep the transcript and activity feed in view while it works.</p>
+          </div>
+        </aside>
+      </section>
+
+      <section class="workspace-grid workspace-studio-grid">
+        <section class="panel workspace-panel workspace-studio-panel">
+          <p class="eyebrow">Workspace Studio</p>
+          <div class="section-head">
+            <h3>Local IDE Surface</h3>
+            <span class="helper" id="workspace-studio-summary">Choose a workspace to inspect files, edit code, and run commands here.</span>
+          </div>
+
+          <div class="studio-shell">
+            <aside class="studio-rail">
+              <div class="studio-panel">
+                <div class="section-head">
+                  <h3>Files</h3>
+                  <button class="ghost" id="refresh-workspace-tree" type="button">Refresh</button>
+                </div>
+                <ul class="file-tree" id="workspace-tree"></ul>
+              </div>
+
+              <div class="studio-panel">
+                <div class="section-head">
+                  <h3>Run</h3>
+                  <span class="helper" id="workspace-run-status">Idle</span>
+                </div>
+                <label>
+                  Command
+                  <input class="runner-command" id="workspace-command" type="text" placeholder="python3 snake.py">
+                </label>
+                <div class="button-row">
+                  <button class="primary" id="run-selected-file" type="button">Run File</button>
+                  <button class="ghost" id="run-workspace-tests" type="button">Run Tests</button>
+                  <button class="ghost" id="run-workspace-command" type="button">Run Here</button>
+                  <button class="ghost" id="launch-workspace-external" type="button">Launch External</button>
+                </div>
+              </div>
+            </aside>
+
+            <div class="studio-main">
+              <div class="studio-panel editor-stage">
+                <div class="editor-toolbar">
+                  <div>
+                    <h3>Editor</h3>
+                    <code id="workspace-current-file">No file selected</code>
+                  </div>
+                  <div class="button-row">
+                    <button class="secondary" id="revert-workspace-file" type="button">Revert</button>
+                    <button class="primary" id="save-workspace-file" type="button">Save File</button>
+                  </div>
+                </div>
+                <textarea class="editor-textarea" id="workspace-editor" placeholder="Select a file from the workspace tree to view or edit it."></textarea>
+              </div>
+
+              <div class="studio-output-grid">
+                <div class="studio-panel">
+                  <div class="runner-toolbar">
+                    <div>
+                      <h3>Terminal</h3>
+                      <code id="workspace-last-command">No command run yet</code>
+                    </div>
+                    <div class="button-row">
+                      <button class="ghost" id="interrupt-workspace-terminal" type="button">Interrupt</button>
+                      <button class="ghost" id="clear-workspace-output" type="button">Clear</button>
+                    </div>
+                  </div>
+                  <div class="runner-terminal-wrap">
+                    <div class="runner-terminal" id="workspace-terminal"></div>
+                    <div class="runner-terminal-empty" id="workspace-terminal-empty">Terminal session will appear here when a workspace is ready.</div>
+                  </div>
+                </div>
+
+                <div class="studio-panel preview-panel">
+                  <div class="runner-toolbar">
+                    <div>
+                      <h3>Preview</h3>
+                      <code id="workspace-preview-status">No preview connected</code>
+                    </div>
+                    <div class="button-row">
+                      <button class="ghost" id="open-workspace-preview" type="button">Open Preview</button>
+                      <button class="ghost" id="open-workspace-preview-tab" type="button">New Tab</button>
+                      <button class="ghost" id="clear-workspace-preview" type="button">Clear</button>
+                    </div>
+                  </div>
+                  <label>
+                    Preview URL
+                    <input class="runner-command" id="workspace-preview-url" type="text" placeholder="http://127.0.0.1:3000">
+                  </label>
+                  <div class="preview-frame-wrap" id="workspace-preview-frame-wrap">
+                    <iframe class="preview-frame" id="workspace-preview-frame" title="Workspace Preview"></iframe>
+                    <div class="preview-empty" id="workspace-preview-empty">Run a local web app here and Claw Dev will latch onto the preview URL automatically.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel workspace-panel workspace-studio-side">
+          <p class="eyebrow">Workspace Pulse</p>
+          <div class="section-head">
+            <h3>Studio Status</h3>
+            <span class="helper">Live workspace context</span>
+          </div>
+
+          <div class="workspace-meta-list">
+            <div class="workspace-meta-card">
+              <strong>Workspace</strong>
+              <code id="workspace-meta-path">No workspace selected</code>
+            </div>
+            <div class="workspace-meta-card">
+              <strong>Visible Files</strong>
+              <span id="workspace-meta-count">0 files indexed</span>
+            </div>
+            <div class="workspace-meta-card">
+              <strong>Current File</strong>
+              <code id="workspace-meta-file">No file selected</code>
+            </div>
+            <div class="workspace-meta-card">
+              <strong>Last Command</strong>
+              <code id="workspace-meta-command">No command run yet</code>
+            </div>
+            <div class="workspace-meta-card">
+              <strong>Run Status</strong>
+              <span id="workspace-meta-run">Idle</span>
+            </div>
+            <div class="workspace-meta-card">
+              <strong>Preview</strong>
+              <code id="workspace-meta-preview">No preview connected</code>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h3>Operator Note</h3>
+            </div>
+            <p class="mini-copy">The live activity and update feed stays in the right rail above. This studio panel stays focused on files, editing, and running code.</p>
           </div>
         </aside>
       </section>
     </main>
   </div>
 
+  <script src="/node_modules/xterm/lib/xterm.js"></script>
+  <script src="/node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
   <script>
     const providerEl = document.getElementById("provider");
     const modelSelectEl = document.getElementById("model-select");
     const modelEl = document.getElementById("model");
     const customModelOptionsEl = document.getElementById("custom-model-options");
     const cwdEl = document.getElementById("cwd");
+    const pickWorkspaceButton = document.getElementById("pick-workspace");
+    const useRepoWorkspaceButton = document.getElementById("use-repo-workspace");
     const startSessionButton = document.getElementById("start-session");
     const resetSessionButton = document.getElementById("reset-session");
     const sendMessageButton = document.getElementById("send-message");
@@ -1978,6 +3175,7 @@
     const telegramProviderInputEl = document.getElementById("telegram-provider-input");
     const telegramModelInputEl = document.getElementById("telegram-model-input");
     const telegramCwdInputEl = document.getElementById("telegram-cwd-input");
+    const pickTelegramWorkspaceButton = document.getElementById("pick-telegram-workspace");
     const telegramStoredTokenEl = document.getElementById("telegram-stored-token");
     const saveTelegramConfigButton = document.getElementById("save-telegram-config");
     const refreshUpdatesButton = document.getElementById("refresh-updates");
@@ -1991,6 +3189,37 @@
     const updateRemoteVersionEl = document.getElementById("update-remote-version");
     const updateNextActionEl = document.getElementById("update-next-action");
     const updateRepoEl = document.getElementById("update-repo");
+    const workspaceStudioSummaryEl = document.getElementById("workspace-studio-summary");
+    const workspaceTreeEl = document.getElementById("workspace-tree");
+    const refreshWorkspaceTreeButton = document.getElementById("refresh-workspace-tree");
+    const workspaceRunStatusEl = document.getElementById("workspace-run-status");
+    const workspaceCommandEl = document.getElementById("workspace-command");
+    const runSelectedFileButton = document.getElementById("run-selected-file");
+    const runWorkspaceTestsButton = document.getElementById("run-workspace-tests");
+    const runWorkspaceCommandButton = document.getElementById("run-workspace-command");
+    const workspaceCurrentFileEl = document.getElementById("workspace-current-file");
+    const revertWorkspaceFileButton = document.getElementById("revert-workspace-file");
+    const saveWorkspaceFileButton = document.getElementById("save-workspace-file");
+    const workspaceEditorEl = document.getElementById("workspace-editor");
+    const workspaceLastCommandEl = document.getElementById("workspace-last-command");
+    const launchWorkspaceExternalButton = document.getElementById("launch-workspace-external");
+    const interruptWorkspaceTerminalButton = document.getElementById("interrupt-workspace-terminal");
+    const clearWorkspaceOutputButton = document.getElementById("clear-workspace-output");
+    const workspaceTerminalEl = document.getElementById("workspace-terminal");
+    const workspaceTerminalEmptyEl = document.getElementById("workspace-terminal-empty");
+    const workspacePreviewStatusEl = document.getElementById("workspace-preview-status");
+    const workspacePreviewUrlEl = document.getElementById("workspace-preview-url");
+    const openWorkspacePreviewButton = document.getElementById("open-workspace-preview");
+    const openWorkspacePreviewTabButton = document.getElementById("open-workspace-preview-tab");
+    const clearWorkspacePreviewButton = document.getElementById("clear-workspace-preview");
+    const workspacePreviewFrameEl = document.getElementById("workspace-preview-frame");
+    const workspacePreviewEmptyEl = document.getElementById("workspace-preview-empty");
+    const workspaceMetaPathEl = document.getElementById("workspace-meta-path");
+    const workspaceMetaCountEl = document.getElementById("workspace-meta-count");
+    const workspaceMetaFileEl = document.getElementById("workspace-meta-file");
+    const workspaceMetaCommandEl = document.getElementById("workspace-meta-command");
+    const workspaceMetaRunEl = document.getElementById("workspace-meta-run");
+    const workspaceMetaPreviewEl = document.getElementById("workspace-meta-preview");
 
     let metadata = null;
     let session = null;
@@ -2009,9 +3238,28 @@
     let ollamaConfigOpen = false;
     let telegramConfigOpen = false;
     let telegramAdvancedOpen = false;
+    let workspaceTree = [];
+    let workspaceCurrentFile = null;
+    let workspaceOriginalContent = "";
+    let workspacePlatform = "darwin";
+    let latestWrittenWorkspaceFile = null;
+    let activeWorkspaceProcessId = null;
+    let workspaceTerminal = null;
+    let workspaceTerminalFit = null;
+    let workspaceTerminalId = null;
+    let workspaceTerminalCursor = 0;
+    let workspaceTerminalPollTimer = null;
+    let workspaceTerminalCwd = "";
+    let workspacePreviewUrl = "";
+    let workspacePreviewObjectUrl = null;
+    const collapsedWorkspaceDirs = new Set();
 
     const metadataHeartbeatMs = 60000;
     const updateHeartbeatMs = 300000;
+
+    renderWorkspaceEditorState();
+    initializeWorkspaceTerminal();
+    renderWorkspacePreview();
 
     boot().catch((error) => {
       setStatus(error.message || String(error), true);
@@ -2059,6 +3307,24 @@
       syncSignals();
     });
 
+    pickWorkspaceButton.addEventListener("click", async () => {
+      await chooseFolderForInput(cwdEl, "Workspace updated.");
+    });
+
+    useRepoWorkspaceButton.addEventListener("click", () => {
+      if (!metadata?.defaultCwd) {
+        return;
+      }
+      cwdEl.value = metadata.defaultCwd;
+      syncSignals();
+      void loadWorkspaceTree(true);
+      setStatus("Workspace set to this Claw Dev repo.", false);
+    });
+
+    pickTelegramWorkspaceButton.addEventListener("click", async () => {
+      await chooseFolderForInput(telegramCwdInputEl, "Telegram workspace updated.");
+    });
+
     startSessionButton.addEventListener("click", startSession);
     resetSessionButton.addEventListener("click", resetSession);
     sendMessageButton.addEventListener("click", sendPrompt);
@@ -2082,6 +3348,31 @@
     saveTelegramConfigButton.addEventListener("click", saveTelegramConfig);
     refreshUpdatesButton.addEventListener("click", () => refreshUpdateStatus(false, true));
     installUpdateButton.addEventListener("click", installUpdate);
+    refreshWorkspaceTreeButton.addEventListener("click", () => loadWorkspaceTree(false));
+    runSelectedFileButton.addEventListener("click", runSelectedWorkspaceFile);
+    runWorkspaceTestsButton.addEventListener("click", runWorkspaceTests);
+    runWorkspaceCommandButton.addEventListener("click", () => runWorkspaceCommandFromInput());
+    launchWorkspaceExternalButton.addEventListener("click", () => runWorkspaceCommandFromInput({ launchMode: "external" }));
+    interruptWorkspaceTerminalButton.addEventListener("click", interruptWorkspaceTerminal);
+    saveWorkspaceFileButton.addEventListener("click", saveWorkspaceFile);
+    revertWorkspaceFileButton.addEventListener("click", revertWorkspaceFile);
+    clearWorkspaceOutputButton.addEventListener("click", () => {
+      clearWorkspaceTerminalView();
+    });
+    openWorkspacePreviewButton.addEventListener("click", () => {
+      loadWorkspacePreview(workspacePreviewUrlEl.value.trim(), true);
+    });
+    openWorkspacePreviewTabButton.addEventListener("click", () => {
+      const previewUrl = workspacePreviewUrlEl.value.trim();
+      if (!previewUrl) {
+        setStatus("Enter or detect a preview URL first.", true);
+        return;
+      }
+      window.open(previewUrl, "_blank", "noopener,noreferrer");
+    });
+    clearWorkspacePreviewButton.addEventListener("click", () => {
+      loadWorkspacePreview("");
+    });
     providerKeyToggleButton.addEventListener("click", () => {
       setProviderKeyPanelOpen(!providerKeyPanelOpen);
     });
@@ -2114,6 +3405,33 @@
       });
     });
 
+    workspaceEditorEl.addEventListener("input", () => {
+      renderWorkspaceEditorState();
+    });
+
+    workspaceCommandEl.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+        return;
+      }
+
+      event.preventDefault();
+      void runWorkspaceCommandFromInput();
+    });
+
+    workspacePreviewUrlEl.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+        return;
+      }
+
+      event.preventDefault();
+      loadWorkspacePreview(workspacePreviewUrlEl.value.trim(), true);
+    });
+
+    window.addEventListener("resize", () => {
+      fitWorkspaceTerminal();
+      void resizeWorkspaceTerminal();
+    });
+
     setInterval(() => {
       void refreshMetadata(true);
     }, metadataHeartbeatMs);
@@ -2122,15 +3440,257 @@
       void refreshUpdateStatus(true, true);
     }, updateHeartbeatMs);
 
+    function initializeWorkspaceTerminal() {
+      if (!window.Terminal || !window.FitAddon || workspaceTerminal) {
+        return;
+      }
+
+      workspaceTerminal = new window.Terminal({
+        cursorBlink: true,
+        fontFamily: '"IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace',
+        fontSize: 13,
+        lineHeight: 1.35,
+        theme: {
+          background: "#081019",
+          foreground: "#e7edf7",
+          cursor: "#f39962",
+          selectionBackground: "rgba(243, 153, 98, 0.22)",
+          black: "#09111a",
+          brightBlack: "#5a6476",
+          red: "#ff8d73",
+          brightRed: "#ffad97",
+          green: "#6fd6a5",
+          brightGreen: "#8af0bf",
+          yellow: "#f3b35d",
+          brightYellow: "#ffca86",
+          blue: "#8db7ff",
+          brightBlue: "#b6d1ff",
+          magenta: "#c2a8ff",
+          brightMagenta: "#dac6ff",
+          cyan: "#88e5ff",
+          brightCyan: "#b3f1ff",
+          white: "#d9e2f1",
+          brightWhite: "#ffffff",
+        },
+      });
+      workspaceTerminalFit = new window.FitAddon.FitAddon();
+      workspaceTerminal.loadAddon(workspaceTerminalFit);
+      workspaceTerminal.open(workspaceTerminalEl);
+      fitWorkspaceTerminal();
+      workspaceTerminal.onData((data) => {
+        if (!workspaceTerminalId) {
+          return;
+        }
+        void sendWorkspaceTerminalInput(data);
+      });
+    }
+
+    function fitWorkspaceTerminal() {
+      try {
+        workspaceTerminalFit?.fit();
+      } catch {}
+    }
+
+    async function resizeWorkspaceTerminal() {
+      if (!workspaceTerminalId || !workspaceTerminal) {
+        return;
+      }
+
+      try {
+        await fetch(`/api/workspace/terminal/${encodeURIComponent(workspaceTerminalId)}/resize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cols: workspaceTerminal.cols,
+            rows: workspaceTerminal.rows,
+          }),
+        });
+      } catch {}
+    }
+
+    async function ensureWorkspaceTerminal(force = false) {
+      const cwd = cwdEl.value.trim() || metadata?.defaultCwd || "";
+      if (!cwd) {
+        return null;
+      }
+
+      initializeWorkspaceTerminal();
+
+      if (workspaceTerminalId && workspaceTerminalCwd === cwd && !force) {
+        return workspaceTerminalId;
+      }
+
+      const response = await fetch("/api/workspace/terminal/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok || !payload.terminal) {
+        throw new Error(payload.error || "Failed to start workspace terminal.");
+      }
+
+      if (workspaceTerminalId !== payload.terminal.id) {
+        workspaceTerminal?.clear();
+        workspaceTerminalId = payload.terminal.id;
+        workspaceTerminalCursor = 0;
+      }
+
+      workspaceTerminalCwd = cwd;
+      syncWorkspaceTerminalSummary(payload.terminal);
+      fitWorkspaceTerminal();
+      void resizeWorkspaceTerminal();
+      startWorkspaceTerminalPolling();
+      return workspaceTerminalId;
+    }
+
+    function startWorkspaceTerminalPolling() {
+      if (workspaceTerminalPollTimer) {
+        return;
+      }
+
+      workspaceTerminalPollTimer = window.setInterval(() => {
+        void pollWorkspaceTerminal();
+      }, 320);
+    }
+
+    async function pollWorkspaceTerminal() {
+      if (!workspaceTerminalId) {
+        return;
+      }
+
+      const terminalId = workspaceTerminalId;
+      try {
+        const response = await fetch(`/api/workspace/terminal/${encodeURIComponent(terminalId)}?cursor=${workspaceTerminalCursor}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.ok || !payload.terminal) {
+          throw new Error(payload.error || "Failed to read workspace terminal.");
+        }
+
+        if (workspaceTerminalId !== terminalId) {
+          return;
+        }
+
+        if (payload.output?.chunk) {
+          workspaceTerminal?.write(payload.output.chunk);
+        }
+        workspaceTerminalCursor = payload.output?.cursor ?? workspaceTerminalCursor;
+        syncWorkspaceTerminalSummary(payload.terminal);
+      } catch (error) {
+        workspaceRunStatusEl.textContent = "Terminal error";
+        workspaceMetaRunEl.textContent = "Terminal error";
+      }
+    }
+
+    function syncWorkspaceTerminalSummary(summary) {
+      workspaceTerminalEmptyEl.hidden = Boolean(summary?.id);
+      if (summary?.previewUrl) {
+        maybeAdoptPreviewUrl(summary.previewUrl);
+      }
+
+      if (!summary) {
+        return;
+      }
+
+      const statusLabel = summary.status === "running" ? "Terminal ready" : "Terminal exited";
+      if (workspaceRunStatusEl.textContent === "Idle" || workspaceRunStatusEl.textContent.startsWith("Terminal")) {
+        workspaceRunStatusEl.textContent = statusLabel;
+      }
+      if (workspaceMetaRunEl.textContent === "Idle" || workspaceMetaRunEl.textContent.startsWith("Terminal")) {
+        workspaceMetaRunEl.textContent = statusLabel;
+      }
+    }
+
+    async function sendWorkspaceTerminalInput(input) {
+      if (!workspaceTerminalId) {
+        return;
+      }
+
+      await fetch(`/api/workspace/terminal/${encodeURIComponent(workspaceTerminalId)}/input`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input }),
+      });
+    }
+
+    async function interruptWorkspaceTerminal() {
+      if (!workspaceTerminalId) {
+        setStatus("Start the workspace terminal first.", true);
+        return;
+      }
+
+      await fetch(`/api/workspace/terminal/${encodeURIComponent(workspaceTerminalId)}/interrupt`, {
+        method: "POST",
+      });
+      workspaceRunStatusEl.textContent = "Interrupted";
+      workspaceMetaRunEl.textContent = "Interrupted";
+      setStatus("Sent interrupt to the workspace terminal.", false);
+    }
+
+    function clearWorkspaceTerminalView() {
+      workspaceTerminal?.clear();
+      workspaceLastCommandEl.textContent = "No command run yet";
+      workspaceRunStatusEl.textContent = workspaceTerminalId ? "Terminal ready" : "Idle";
+      workspaceMetaCommandEl.textContent = "No command run yet";
+      workspaceMetaRunEl.textContent = workspaceTerminalId ? "Terminal ready" : "Idle";
+    }
+
+    function loadWorkspacePreview(url, announce = false, options = {}) {
+      if (workspacePreviewObjectUrl && workspacePreviewObjectUrl !== url) {
+        URL.revokeObjectURL(workspacePreviewObjectUrl);
+        workspacePreviewObjectUrl = null;
+      }
+
+      if (options.objectUrl && url) {
+        workspacePreviewObjectUrl = url;
+      }
+
+      workspacePreviewUrl = url;
+      workspacePreviewUrlEl.value = url;
+      renderWorkspacePreview();
+      if (announce) {
+        setStatus(url ? "Preview updated." : "Preview cleared.", false);
+      }
+    }
+
+    function maybeAdoptPreviewUrl(url) {
+      if (!url || workspacePreviewUrl === url) {
+        return;
+      }
+      loadWorkspacePreview(url);
+    }
+
+    function renderWorkspacePreview() {
+      const hasPreview = Boolean(workspacePreviewUrl);
+      workspacePreviewFrameEl.src = hasPreview ? workspacePreviewUrl : "about:blank";
+      workspacePreviewEmptyEl.hidden = hasPreview;
+      workspacePreviewStatusEl.textContent = hasPreview ? workspacePreviewUrl : "No preview connected";
+      workspaceMetaPreviewEl.textContent = hasPreview ? workspacePreviewUrl : "No preview connected";
+    }
+
+    async function saveWorkspaceFileIfDirty() {
+      if (!workspaceCurrentFile || workspaceEditorEl.value === workspaceOriginalContent) {
+        return true;
+      }
+
+      try {
+        await saveWorkspaceFile(true);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     async function boot() {
       await refreshMetadata(false, true);
+      await loadWorkspaceTree(true);
       await refreshProviderSecretState(providerKeyProviderEl.value, true);
       await refreshOllamaStatus(true);
       await refreshOpenAIAuthStatus(true);
       await refreshTelegramStatus(true);
       await refreshUpdateStatus(true, false);
       await refreshSessions();
-      setStatus("Ready. Start a session to begin.", false);
+      setStatus("Ready. Pick a provider, choose a workspace, and start a session.", false);
       addActivity("App ready", `Default provider: ${getSelectedProviderMeta()?.label || "unknown"}.`, "info");
     }
 
@@ -2146,6 +3706,7 @@
       const shouldPreserveManualModel = modelEl.dataset.touched === "true";
 
       metadata = payload;
+      workspacePlatform = payload.platform || workspacePlatform;
       syncProviderSecretOptions(payload.providers);
       providerEl.innerHTML = payload.providers
         .map((provider) => `<option value="${escapeAttribute(provider.value)}">${escapeHtml(provider.label)}</option>`)
@@ -2185,6 +3746,7 @@
       renderProviderSetup();
       renderModelSpotlight();
       syncSignals();
+      renderWorkspaceStudioSummary();
 
       if (!silent && preferred.value === "openrouter" && preferred.heartbeat?.refreshedAt) {
         addActivity("OpenRouter heartbeat refreshed", preferred.detail, "info");
@@ -2343,6 +3905,7 @@
         setStatus("Session ready. Send a prompt.", false);
         focusCopyEl.textContent = `Active session: ${session.provider} on ${session.model}. This workspace is now the live context for prompts and tool runs.`;
         syncSignals();
+        await loadWorkspaceTree(true);
         metricTurnCountEl.textContent = String(session.turns || 0);
         addActivity("Session started", `${session.provider} · ${session.model}`, "success");
         await refreshSessions();
@@ -2375,6 +3938,7 @@
         setStatus("Session reset. You can continue with a fresh conversation.", false);
         focusCopyEl.textContent = "The active session is still open, but the conversation has been cleared.";
         metricTurnCountEl.textContent = "0";
+        await loadWorkspaceTree(true);
         addActivity("Session reset", `${session.provider} conversation cleared.`, "info");
         await refreshSessions();
       } catch (error) {
@@ -2404,6 +3968,7 @@
       addActivity("Prompt sent", summarizePrompt(prompt), "info");
       focusCopyEl.textContent = "The agent is working on the current prompt. Watch the transcript and activity feed for updates.";
       streamingMessageEl = createStreamingAssistantMessage();
+      latestWrittenWorkspaceFile = null;
 
       const startedAt = performance.now();
 
@@ -2443,6 +4008,9 @@
               event.contentPreview || (event.isError ? "Tool failed." : "Tool finished."),
               event.isError ? "error" : "tool",
             );
+            if (!event.isError && event.toolName === "write_file" && event.filePath) {
+              latestWrittenWorkspaceFile = event.filePath;
+            }
             return;
           }
 
@@ -2466,7 +4034,31 @@
 
         finalizeStreamingAssistantMessage(streamingMessageEl, streamedText || "(empty response)");
         streamingMessageEl = null;
-        setStatus("Response complete.", false);
+        let responseStatusMessage = "Response complete.";
+        if (latestWrittenWorkspaceFile) {
+          await loadWorkspaceTree(true);
+          await openWorkspaceFile(latestWrittenWorkspaceFile);
+          const autoRunCommand = await commandForSelectedFile(latestWrittenWorkspaceFile, workspaceEditorEl.value, { preparePython: true });
+          if (autoRunCommand) {
+            const autoRunMode = determineFileRunMode(latestWrittenWorkspaceFile, workspaceEditorEl.value);
+            if (autoRunMode === "preview") {
+              openFilePreview(latestWrittenWorkspaceFile, workspaceEditorEl.value);
+              responseStatusMessage = `Response complete. Opened ${latestWrittenWorkspaceFile} and loaded it in Preview.`;
+            } else {
+              workspaceCommandEl.value = autoRunCommand;
+              await runWorkspaceCommand(autoRunCommand, autoRunMode === "external" ? { launchMode: "external" } : {});
+              responseStatusMessage = autoRunMode === "external"
+                ? `Response complete. Opened ${latestWrittenWorkspaceFile} and launched it outside the browser.`
+                : `Response complete. Opened and ran ${latestWrittenWorkspaceFile} in Workspace Studio.`;
+            }
+          } else {
+            responseStatusMessage = `Response complete. Opened ${latestWrittenWorkspaceFile} in Workspace Studio.`;
+          }
+        }
+        if (!latestWrittenWorkspaceFile && detectCodeArtifacts(streamedText).length > 0) {
+          responseStatusMessage = "Response complete. This model returned code in chat. Use the transcript buttons to create the file or files in the IDE and run them.";
+        }
+        setStatus(responseStatusMessage, false);
         updateSessionBadge("live", `${session.provider} live`);
         focusCopyEl.textContent = "Latest response complete. You can continue the conversation or reset the session.";
         addActivity("Response complete", `${Math.round(performance.now() - startedAt)} ms · ${session?.turns || 0} turns in this session`, "success");
@@ -2483,6 +4075,542 @@
       } finally {
         setBusy(false);
       }
+    }
+
+    async function loadWorkspaceTree(silent = false) {
+      const cwd = cwdEl.value.trim() || metadata?.defaultCwd || "";
+      if (!cwd) {
+        workspaceTree = [];
+        renderWorkspaceTree();
+        renderWorkspaceStudioSummary();
+        return;
+      }
+
+      const previouslySelectedFile = workspaceCurrentFile;
+
+      try {
+        const response = await fetch(`/api/workspace/tree?cwd=${encodeURIComponent(cwd)}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to load workspace files.");
+        }
+
+        workspaceTree = payload.tree || [];
+        syncCollapsedWorkspaceDirs(workspaceTree);
+        renderWorkspaceTree();
+        renderWorkspaceStudioSummary();
+
+        if (workspaceCurrentFile) {
+          const stillExists = flattenWorkspaceTree(workspaceTree).some((item) => item.type === "file" && item.path === workspaceCurrentFile);
+          if (!stillExists) {
+            workspaceCurrentFile = null;
+            workspaceOriginalContent = "";
+            workspaceEditorEl.value = "";
+            renderWorkspaceEditorState();
+          } else if (previouslySelectedFile) {
+            await openWorkspaceFile(previouslySelectedFile, true);
+          }
+        }
+
+        await ensureWorkspaceTerminal(workspaceTerminalCwd !== cwd);
+
+        if (!silent) {
+          setStatus("Workspace files refreshed.", false);
+        }
+      } catch (error) {
+        workspaceTree = [];
+        renderWorkspaceTree(error.message || String(error));
+        renderWorkspaceStudioSummary(error.message || String(error));
+        if (!silent) {
+          setStatus(error.message || String(error), true);
+        }
+      }
+    }
+
+    function renderWorkspaceTree(errorMessage = "") {
+      if (errorMessage) {
+        workspaceTreeEl.innerHTML = `<li class="studio-empty">${escapeHtml(errorMessage)}</li>`;
+        return;
+      }
+
+      if (!workspaceTree.length) {
+        workspaceTreeEl.innerHTML = `<li class="studio-empty">No visible files yet. Pick a workspace or refresh the tree.</li>`;
+        return;
+      }
+
+      workspaceTreeEl.innerHTML = workspaceTree.map((node) => renderWorkspaceNode(node)).join("");
+      workspaceTreeEl.querySelectorAll("[data-dir-path]").forEach((button) => {
+        button.addEventListener("click", () => {
+          toggleWorkspaceDirectory(button.dataset.dirPath || "");
+        });
+      });
+      workspaceTreeEl.querySelectorAll("[data-file-path]").forEach((button) => {
+        button.addEventListener("click", () => {
+          void openWorkspaceFile(button.dataset.filePath || "");
+        });
+      });
+    }
+
+    function renderWorkspaceNode(node, depth = 0) {
+      if (node.type === "directory") {
+        const isCollapsed = collapsedWorkspaceDirs.has(node.path);
+        const childMarkup = (node.children || []).map((child) => renderWorkspaceNode(child, depth + 1)).join("");
+        return `
+          <li>
+            <button class="tree-row" type="button" data-dir-path="${escapeAttribute(node.path)}" aria-expanded="${isCollapsed ? "false" : "true"}">
+              <span class="tree-caret">${isCollapsed ? "▸" : "▾"}</span><span>${escapeHtml(node.name)}</span>
+            </button>
+            <ul class="tree-children" ${isCollapsed ? "hidden" : ""}>
+              ${childMarkup}
+            </ul>
+          </li>
+        `;
+      }
+
+      const activeClass = workspaceCurrentFile === node.path ? "active" : "";
+      return `
+        <li>
+          <button class="tree-row ${activeClass}" type="button" data-file-path="${escapeAttribute(node.path)}">
+            <span>•</span><span>${escapeHtml(node.name)}</span>
+          </button>
+        </li>
+      `;
+    }
+
+    function toggleWorkspaceDirectory(relativePath) {
+      if (!relativePath) {
+        return;
+      }
+
+      if (collapsedWorkspaceDirs.has(relativePath)) {
+        collapsedWorkspaceDirs.delete(relativePath);
+      } else {
+        collapsedWorkspaceDirs.add(relativePath);
+      }
+
+      renderWorkspaceTree();
+    }
+
+    function syncCollapsedWorkspaceDirs(nodes, depth = 0) {
+      for (const node of nodes || []) {
+        if (node.type !== "directory") {
+          continue;
+        }
+
+        if (depth >= 1 && !collapsedWorkspaceDirs.has(node.path)) {
+          collapsedWorkspaceDirs.add(node.path);
+        }
+
+        syncCollapsedWorkspaceDirs(node.children || [], depth + 1);
+      }
+    }
+
+    async function openWorkspaceFile(relativePath, silent = false) {
+      if (!relativePath) {
+        return;
+      }
+
+      const cwd = cwdEl.value.trim() || metadata?.defaultCwd || "";
+      try {
+        const response = await fetch(`/api/workspace/file?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(relativePath)}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to open file.");
+        }
+
+        workspaceCurrentFile = payload.path;
+        workspaceOriginalContent = payload.content;
+        workspaceEditorEl.value = payload.content;
+        const suggestedCommand = await commandForSelectedFile(payload.path, payload.content);
+        if (suggestedCommand) {
+          workspaceCommandEl.value = suggestedCommand;
+        }
+        renderWorkspaceTree();
+        renderWorkspaceEditorState();
+        if (!silent) {
+          setStatus(`Opened ${payload.path}.`, false);
+        }
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        addActivity("Open file failed", error.message || String(error), "error");
+      }
+    }
+
+    async function saveWorkspaceFile(silent = false) {
+      if (!workspaceCurrentFile) {
+        const error = new Error("Choose a file first.");
+        if (!silent) {
+          setStatus(error.message, true);
+        }
+        throw error;
+      }
+
+      const cwd = cwdEl.value.trim() || metadata?.defaultCwd || "";
+      try {
+        const response = await fetch("/api/workspace/file", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cwd,
+            path: workspaceCurrentFile,
+            content: workspaceEditorEl.value,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to save file.");
+        }
+
+        workspaceOriginalContent = workspaceEditorEl.value;
+        renderWorkspaceEditorState();
+        addActivity("File saved", payload.path, "success");
+        if (!silent) {
+          setStatus(`Saved ${payload.path}.`, false);
+        }
+        await loadWorkspaceTree(true);
+        return payload.path;
+      } catch (error) {
+        const message = error.message || String(error);
+        if (!silent) {
+          setStatus(message, true);
+          addActivity("Save failed", message, "error");
+        }
+        throw error;
+      }
+    }
+
+    function revertWorkspaceFile() {
+      workspaceEditorEl.value = workspaceOriginalContent;
+      renderWorkspaceEditorState();
+      setStatus("Editor reverted to the last saved version.", false);
+    }
+
+    async function runWorkspaceCommandFromInput(options = {}) {
+      const command = workspaceCommandEl.value.trim();
+      if (!command) {
+        setStatus("Enter a command to run.", true);
+        return;
+      }
+      await runWorkspaceCommand(command, options);
+    }
+
+    async function runSelectedWorkspaceFile() {
+      if (!workspaceCurrentFile) {
+        setStatus("Choose a file to run first.", true);
+        return;
+      }
+
+      if (!(await saveWorkspaceFileIfDirty())) {
+        return;
+      }
+
+      const command = await commandForSelectedFile(workspaceCurrentFile, workspaceEditorEl.value, { preparePython: true });
+      if (!command) {
+        if (determineFileRunMode(workspaceCurrentFile, workspaceEditorEl.value) === "preview") {
+          openFilePreview(workspaceCurrentFile, workspaceEditorEl.value, true);
+          return;
+        }
+        setStatus("Claw Dev does not know how to run this file yet. Use a custom command.", true);
+        return;
+      }
+
+      workspaceCommandEl.value = command;
+      const runMode = determineFileRunMode(workspaceCurrentFile, workspaceEditorEl.value);
+      if (runMode === "preview") {
+        openFilePreview(workspaceCurrentFile, workspaceEditorEl.value, true);
+        return;
+      }
+
+      await runWorkspaceCommand(command, runMode === "external" ? { launchMode: "external" } : {});
+    }
+
+    async function runWorkspaceTests() {
+      if (!(await saveWorkspaceFileIfDirty())) {
+        return;
+      }
+
+      const command = suggestedTestCommand();
+      if (!command) {
+        setStatus("No default test command detected for this workspace yet.", true);
+        return;
+      }
+
+      workspaceCommandEl.value = command;
+      await runWorkspaceCommand(command);
+    }
+
+    async function runWorkspaceCommand(command, options = {}) {
+      const useExternalLaunch = options.launchMode === "external" || shouldLaunchInExternalTerminal(command);
+      const cwd = cwdEl.value.trim() || metadata?.defaultCwd || "";
+      workspaceLastCommandEl.textContent = command;
+      workspaceMetaCommandEl.textContent = command;
+
+      if (!useExternalLaunch) {
+        try {
+          await ensureWorkspaceTerminal();
+          workspaceRunStatusEl.textContent = "Running in terminal";
+          workspaceMetaRunEl.textContent = "Running in terminal";
+          workspaceTerminalEmptyEl.hidden = true;
+          await sendWorkspaceTerminalInput(`${command}\r`);
+          setStatus("Command sent to the embedded terminal.", false);
+          addActivity("Workspace command sent", command, "success");
+        } catch (error) {
+          workspaceRunStatusEl.textContent = "Terminal error";
+          workspaceMetaRunEl.textContent = "Terminal error";
+          setStatus(error.message || String(error), true);
+          addActivity("Workspace command failed", error.message || String(error), "error");
+        }
+        return;
+      }
+
+      workspaceRunStatusEl.textContent = "Launching externally";
+      workspaceMetaRunEl.textContent = "Launching externally";
+
+      try {
+        const response = await fetch("/api/workspace/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cwd, command, launchMode: "external" }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok || !payload.process) {
+          throw new Error(payload.error || "Failed to run command.");
+        }
+        activeWorkspaceProcessId = payload.process.id;
+        renderWorkspaceProcess(payload.process);
+        if (payload.process.status === "running") {
+          await pollWorkspaceProcess(payload.process.id);
+        } else {
+          activeWorkspaceProcessId = null;
+        }
+      } catch (error) {
+        workspaceRunStatusEl.textContent = "Launch failed";
+        workspaceMetaRunEl.textContent = "Launch failed";
+        setStatus(error.message || String(error), true);
+        addActivity("Workspace launch failed", error.message || String(error), "error");
+      }
+    }
+
+    function shouldLaunchInExternalTerminal(command) {
+      const normalized = String(command || "").trim().toLowerCase();
+      if (!normalized) {
+        return false;
+      }
+
+      return /^(python|python3|node|irb|ruby|lua|bash|zsh|sh)(\s*)$/.test(normalized)
+        || /^(vim|nvim|nano|less|more|man|top|htop|watch)\b/.test(normalized);
+    }
+
+    async function pollWorkspaceProcess(processId) {
+      for (let i = 0; i < 600; i += 1) {
+        if (activeWorkspaceProcessId !== processId) {
+          return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        const response = await fetch(`/api/workspace/process/${encodeURIComponent(processId)}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.ok || !payload.process) {
+          throw new Error(payload.error || "Failed to read workspace process state.");
+        }
+
+        renderWorkspaceProcess(payload.process);
+        if (payload.process.status !== "running") {
+          activeWorkspaceProcessId = null;
+          return;
+        }
+      }
+    }
+
+    function renderWorkspaceProcess(processState) {
+      workspaceLastCommandEl.textContent = processState.command;
+      workspaceMetaCommandEl.textContent = processState.command;
+
+      if (processState.status === "running") {
+        workspaceRunStatusEl.textContent = processState.mode === "external-window" ? "External window launched" : "Running";
+        workspaceMetaRunEl.textContent = processState.mode === "external-window" ? "External window launched" : "Running";
+        setStatus(
+          processState.mode === "external-window"
+            ? "Command launched. A desktop window may have opened."
+            : "Command is running in Workspace Studio.",
+          false,
+        );
+        return;
+      }
+
+      if (processState.status === "launched") {
+        const launchLabel = processState.mode === "terminal-window" ? "Terminal window launched" : "External window launched";
+        workspaceRunStatusEl.textContent = launchLabel;
+        workspaceMetaRunEl.textContent = launchLabel;
+        addActivity("Workspace command launched", processState.command, "success");
+        setStatus(
+          processState.mode === "terminal-window"
+            ? "Command launched in a new Terminal window."
+            : "Command launched in an external window.",
+          false,
+        );
+        return;
+      }
+
+      const succeeded = processState.status === "completed";
+      workspaceRunStatusEl.textContent = succeeded ? "Command finished" : "Command failed";
+      workspaceMetaRunEl.textContent = succeeded ? "Command finished" : "Command failed";
+      addActivity(
+        succeeded ? "Workspace command finished" : "Workspace command failed",
+        processState.command,
+        succeeded ? "success" : "error",
+      );
+      setStatus(succeeded ? "Command finished." : `Command failed with exit code ${processState.exitCode}.`, !succeeded);
+    }
+
+    function renderWorkspaceEditorState() {
+      const hasFile = Boolean(workspaceCurrentFile);
+      const isDirty = workspaceEditorEl.value !== workspaceOriginalContent;
+      workspaceCurrentFileEl.textContent = workspaceCurrentFile || "No file selected";
+      workspaceMetaFileEl.textContent = workspaceCurrentFile || "No file selected";
+      saveWorkspaceFileButton.disabled = !hasFile || !isDirty;
+      revertWorkspaceFileButton.disabled = !hasFile || !isDirty;
+      workspaceEditorEl.disabled = !hasFile;
+      if (!hasFile) {
+        workspaceEditorEl.placeholder = "Select a file from the workspace tree to view or edit it.";
+      }
+    }
+
+    function renderWorkspaceStudioSummary(errorMessage = "") {
+      if (errorMessage) {
+        workspaceStudioSummaryEl.textContent = errorMessage;
+        workspaceMetaPathEl.textContent = errorMessage;
+        workspaceMetaCountEl.textContent = "0 files indexed";
+        return;
+      }
+
+      const cwd = cwdEl.value.trim() || metadata?.defaultCwd || "No workspace selected";
+      const fileCount = flattenWorkspaceTree(workspaceTree).filter((item) => item.type === "file").length;
+      workspaceStudioSummaryEl.textContent = `${compactPath(cwd)} · ${fileCount} visible files`;
+      workspaceMetaPathEl.textContent = compactPath(cwd);
+      workspaceMetaCountEl.textContent = `${fileCount} ${fileCount === 1 ? "file" : "files"} indexed`;
+    }
+
+    function flattenWorkspaceTree(nodes) {
+      const flat = [];
+      for (const node of nodes || []) {
+        flat.push(node);
+        if (node.children?.length) {
+          flat.push(...flattenWorkspaceTree(node.children));
+        }
+      }
+      return flat;
+    }
+
+    async function commandForSelectedFile(relativePath, content = "", options = {}) {
+      const quoted = shellQuote(relativePath);
+      if (relativePath.endsWith(".py")) {
+        const prepared = options.preparePython ? await preparePythonRun(relativePath, content) : null;
+        return prepared?.runCommand || (workspacePlatform === "win32" ? `python ${quoted}` : `python3 ${quoted}`);
+      }
+      if (relativePath.endsWith(".js") || relativePath.endsWith(".mjs") || relativePath.endsWith(".cjs")) {
+        return `node ${quoted}`;
+      }
+      if (relativePath.endsWith(".ts") || relativePath.endsWith(".tsx")) {
+        return `npx tsx ${quoted}`;
+      }
+      return "";
+    }
+
+    async function preparePythonRun(relativePath, content = "") {
+      const cwd = cwdEl.value.trim() || metadata?.defaultCwd || "";
+      if (!cwd || !String(relativePath || "").endsWith(".py")) {
+        return null;
+      }
+
+      const shouldPrepare = determineFileRunMode(relativePath, content) === "external" || /import\s+[a-z0-9_]+/i.test(String(content || ""));
+      if (!shouldPrepare) {
+        return null;
+      }
+
+      const response = await fetch("/api/workspace/python/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cwd,
+          path: relativePath,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok || !payload.python) {
+        throw new Error(payload.error || "Failed to prepare the Python workspace runtime.");
+      }
+
+      if (payload.python.createdVenv) {
+        addActivity("Python runtime prepared", payload.python.runCommand, "success");
+      }
+
+      if (payload.python.missingModules?.length) {
+        throw new Error(`Python dependencies are still missing: ${payload.python.missingModules.join(", ")}`);
+      }
+
+      return payload.python;
+    }
+
+    function determineFileRunMode(relativePath, content = "") {
+      const lowerPath = String(relativePath || "").toLowerCase();
+      const lowerContent = String(content || "").toLowerCase();
+
+      if (lowerPath.endsWith(".html") || lowerPath.endsWith(".htm")) {
+        return "preview";
+      }
+
+      if (
+        lowerContent.includes("import pygame")
+        || lowerContent.includes("from pygame")
+        || lowerContent.includes("import tkinter")
+        || lowerContent.includes("from tkinter")
+        || lowerContent.includes("import turtle")
+        || lowerContent.includes("from turtle")
+        || lowerContent.includes("import pyglet")
+        || lowerContent.includes("import arcade")
+        || lowerContent.includes("import pyxel")
+        || lowerContent.includes("pygame.init(")
+        || lowerContent.includes("tk()")
+      ) {
+        return "external";
+      }
+
+      return "panel";
+    }
+
+    function openFilePreview(relativePath, content = "", announce = false) {
+      const lowerPath = String(relativePath || "").toLowerCase();
+      if (!(lowerPath.endsWith(".html") || lowerPath.endsWith(".htm"))) {
+        return false;
+      }
+
+      const blob = new Blob([content || workspaceEditorEl.value || ""], { type: "text/html" });
+      const previewUrl = URL.createObjectURL(blob);
+      loadWorkspacePreview(previewUrl, announce, { objectUrl: true });
+      workspaceRunStatusEl.textContent = "Preview ready";
+      workspaceMetaRunEl.textContent = "Preview ready";
+      workspaceMetaCommandEl.textContent = `Preview: ${relativePath}`;
+      workspaceLastCommandEl.textContent = `Preview: ${relativePath}`;
+      if (announce) {
+        addActivity("Preview opened", relativePath, "success");
+      }
+      return true;
+    }
+
+    function suggestedTestCommand() {
+      const names = new Set(flattenWorkspaceTree(workspaceTree).map((item) => item.path.split("/")[0]));
+      if (names.has("package.json")) {
+        return "npm test";
+      }
+      if (names.has("pyproject.toml") || names.has("pytest.ini") || names.has("tests")) {
+        return workspacePlatform === "win32" ? "python -m pytest" : "python3 -m pytest";
+      }
+      return "";
+    }
+
+    function shellQuote(value) {
+      return `"${String(value).replaceAll("\"", "\\\"")}"`;
     }
 
     function renderProviderHealth() {
@@ -3019,22 +5147,24 @@
       const currentOption = findModelOption(groups, currentValue) || findModelOption(groups, provider.defaultModel);
 
       spotlightTitleEl.textContent = currentOption?.label || provider.label;
-      spotlightDescriptionEl.textContent = currentOption?.description || provider.detail || "No additional model guidance available.";
+      spotlightDescriptionEl.textContent = spotlightDescription(provider, currentOption);
       spotlightSecondaryEl.textContent = modelSpotlightSecondary(provider.value, currentOption?.value || currentValue);
 
       const badges = [];
       refreshOpenRouterButton.hidden = provider.value !== "openrouter";
       if (provider.value === "openrouter") {
         badges.push({ label: "Hosted", tone: "recommended" });
-        badges.push({ label: "Free heartbeat", tone: "free" });
+        badges.push({ label: "Free models", tone: "free" });
       }
       if (provider.value === "openai") {
-        badges.push({ label: "Default", tone: "recommended" });
-        badges.push({ label: "ChatGPT auth", tone: "free" });
+        badges.push({ label: "Codex", tone: "recommended" });
+        if (openAIAuthState?.status === "configured") {
+          badges.push({ label: "Saved auth", tone: "free" });
+        }
       }
       if (provider.value === "ollama") {
         badges.push({ label: "Local", tone: "local" });
-        badges.push({ label: "Coding-biased", tone: "recommended" });
+        badges.push({ label: "Coding tuned", tone: "recommended" });
       }
       if (currentOption?.badge) {
         badges.unshift({
@@ -3043,9 +5173,29 @@
         });
       }
 
-      spotlightBadgesEl.innerHTML = badges
+      const uniqueBadges = badges.filter((badge, index, all) =>
+        all.findIndex((candidate) => candidate.label.toLowerCase() === badge.label.toLowerCase()) === index,
+      );
+
+      spotlightBadgesEl.innerHTML = uniqueBadges
         .map((badge) => `<span class="spotlight-badge ${escapeAttribute(badge.tone)}">${escapeHtml(badge.label)}</span>`)
         .join("");
+    }
+
+    function spotlightDescription(provider, currentOption) {
+      if (provider.value === "openai") {
+        return "The ChatGPT lane is pinned to Codex and uses your saved local auth when it is available.";
+      }
+
+      if (provider.value === "openrouter") {
+        return currentOption?.description || "Hosted models with a live free-model heartbeat and coding-friendly defaults.";
+      }
+
+      if (provider.value === "ollama") {
+        return currentOption?.description || "Local coding models from your Ollama runtime, tuned for smaller on-device workflows.";
+      }
+
+      return currentOption?.description || provider.detail || "No additional model guidance available.";
     }
 
     function renderSessionList() {
@@ -3097,6 +5247,7 @@
           focusCopyEl.textContent = "A stored in-memory session is now active again. The server still has its conversation context, even though the local transcript panel only shows messages from this browser view.";
           metricTurnCountEl.textContent = String(next.turns || 0);
           syncSignals();
+          void loadWorkspaceTree(true);
           renderProviderSetup();
           renderModelSpotlight();
           renderSessionList();
@@ -3368,6 +5519,41 @@
       }
     }
 
+    async function chooseFolderForInput(inputEl, successMessage) {
+      setStatus("Opening folder picker...", false);
+
+      try {
+        const response = await fetch("/api/system/pick-folder", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            initialPath: inputEl.value.trim(),
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Unable to open the folder picker.");
+        }
+
+        if (payload.cancelled || !payload.path) {
+          setStatus("Folder picker cancelled.", false);
+          return;
+        }
+
+        inputEl.value = payload.path;
+        syncSignals();
+        if (inputEl === cwdEl) {
+          await loadWorkspaceTree(true);
+        }
+        setStatus(successMessage, false);
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        addActivity("Folder picker failed", error.message || String(error), "error");
+      }
+    }
+
     async function stopTelegramBot() {
       telegramStopButton.disabled = true;
       setStatus("Stopping Telegram bot...", false);
@@ -3426,10 +5612,228 @@
       return String(toolName || "tool").replaceAll("_", " ");
     }
 
+    function normalizeCodeFenceLanguage(language) {
+      return String(language || "").trim().toLowerCase();
+    }
+
+    function escapeInlineHtml(text) {
+      return escapeHtml(text).replaceAll("\n", "<br>");
+    }
+
+    function renderMessageBody(text) {
+      const source = String(text || "");
+      const fencePattern = /```([a-zA-Z0-9_+.-]*)\n([\s\S]*?)```/g;
+      let cursor = 0;
+      let html = "";
+      let match;
+
+      while ((match = fencePattern.exec(source)) !== null) {
+        const [fullMatch, language, code] = match;
+        const before = source.slice(cursor, match.index);
+        if (before) {
+          html += `<div>${escapeInlineHtml(before)}</div>`;
+        }
+        const languageLabel = normalizeCodeFenceLanguage(language);
+        const className = languageLabel ? ` class="code-block language-${escapeAttribute(languageLabel)}"` : ` class="code-block"`;
+        html += `<pre${className}><code>${escapeHtml(code)}</code></pre>`;
+        cursor = match.index + fullMatch.length;
+      }
+
+      const trailing = source.slice(cursor);
+      if (trailing || !html) {
+        html += `<div>${escapeInlineHtml(trailing || source)}</div>`;
+      }
+
+      return html;
+    }
+
+    function detectCodeArtifacts(text) {
+      const source = String(text || "");
+      const fencePattern = /```([a-zA-Z0-9_+.-]*)\n([\s\S]*?)```/g;
+      const matches = [];
+      let match;
+      const usedPaths = new Set();
+
+      while ((match = fencePattern.exec(source)) !== null) {
+        const language = normalizeCodeFenceLanguage(match[1]);
+        const code = String(match[2] || "").trim();
+        if (code) {
+          const suggestedPath = suggestArtifactPath(source, language, usedPaths);
+          usedPaths.add(suggestedPath);
+          matches.push({ language, code, suggestedPath });
+        }
+      }
+
+      return matches;
+    }
+
+    function makeUniqueArtifactPath(candidate, usedPaths) {
+      if (!usedPaths.has(candidate)) {
+        return candidate;
+      }
+
+      const extension = candidate.includes(".") ? candidate.slice(candidate.lastIndexOf(".")) : "";
+      const stem = extension ? candidate.slice(0, -extension.length) : candidate;
+      let counter = 2;
+      while (usedPaths.has(`${stem}-${counter}${extension}`)) {
+        counter += 1;
+      }
+      return `${stem}-${counter}${extension}`;
+    }
+
+    function suggestArtifactPath(text, language, usedPaths = new Set()) {
+      const fileMatches = [...text.matchAll(/(?:^|\b|`)([A-Za-z0-9_./-]+\.(py|js|mjs|cjs|ts|tsx|html|css|json|md|sh))(?:`|\b)/gi)];
+      for (const fileMatch of fileMatches) {
+        if (fileMatch?.[1] && !usedPaths.has(fileMatch[1])) {
+          return fileMatch[1];
+        }
+      }
+
+      const basePath = (() => {
+        switch (language) {
+        case "python":
+        case "py":
+          return "generated_script.py";
+        case "javascript":
+        case "js":
+          return "generated_script.js";
+        case "typescript":
+        case "ts":
+          return "generated_script.ts";
+        case "tsx":
+          return "generated_component.tsx";
+        case "html":
+          return "index.html";
+        case "css":
+          return "styles.css";
+        case "json":
+          return "data.json";
+        case "markdown":
+        case "md":
+          return "notes.md";
+        case "sh":
+        case "bash":
+          return "script.sh";
+        default:
+          return "generated_code.txt";
+        }
+      })();
+
+      return makeUniqueArtifactPath(basePath, usedPaths);
+    }
+
+    async function materializeCodeArtifact(artifact, options = {}) {
+      const cwd = cwdEl.value.trim() || metadata?.defaultCwd || "";
+      if (!cwd) {
+        setStatus("Choose a workspace first so Claw Dev knows where to save the generated code.", true);
+        return;
+      }
+
+      const suggestedPath = artifact?.suggestedPath || "generated_code.txt";
+      const chosenPath = window.prompt("Save generated code as:", suggestedPath);
+      if (!chosenPath) {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/workspace/file", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cwd,
+            path: chosenPath.trim(),
+            content: artifact.code,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Failed to save generated code.");
+        }
+
+        await loadWorkspaceTree(true);
+        await openWorkspaceFile(payload.path, true);
+        addActivity("Generated code saved", payload.path, "success");
+
+        if (options.run) {
+          const command = await commandForSelectedFile(payload.path, artifact.code, { preparePython: true });
+          const runMode = determineFileRunMode(payload.path, artifact.code);
+          if (runMode === "preview") {
+            openFilePreview(payload.path, artifact.code, true);
+            setStatus(`Saved ${payload.path} and opened it in Preview.`, false);
+            return;
+          }
+
+          if (command) {
+            workspaceCommandEl.value = command;
+            await runWorkspaceCommand(command, runMode === "external" ? { launchMode: "external" } : {});
+            setStatus(
+              runMode === "external"
+                ? `Saved ${payload.path} and launched it outside the browser.`
+                : `Saved ${payload.path} and ran it in Workspace Studio.`,
+              false,
+            );
+            return;
+          }
+        }
+
+        setStatus(`Saved ${payload.path} into the workspace and opened it in Workspace Studio.`, false);
+      } catch (error) {
+        const message = error.message || String(error);
+        setStatus(message, true);
+        addActivity("Generated code save failed", message, "error");
+      }
+    }
+
+    function attachCodeArtifactActions(article, text) {
+      if (!article || article.querySelector(".message-action-row")) {
+        return;
+      }
+
+      const artifacts = detectCodeArtifacts(text);
+      if (!artifacts.length) {
+        return;
+      }
+
+      const actionRow = document.createElement("div");
+      actionRow.className = "message-action-row";
+
+      const note = document.createElement("div");
+      note.className = "message-action-note";
+      note.textContent = artifacts.length === 1
+        ? `This model returned code in chat instead of creating a workspace file. Claw Dev can turn it into ${artifacts[0].suggestedPath} and open it in the IDE.`
+        : `This model returned ${artifacts.length} code blocks in chat instead of creating workspace files. Claw Dev can turn each one into a real file in the IDE.`;
+
+      for (const artifact of artifacts) {
+        const saveButton = document.createElement("button");
+        saveButton.className = "ghost";
+        saveButton.type = "button";
+        saveButton.textContent = `Create ${artifact.suggestedPath}`;
+        saveButton.addEventListener("click", () => {
+          void materializeCodeArtifact(artifact, { run: false });
+        });
+
+        actionRow.appendChild(saveButton);
+
+        if (artifacts.length === 1) {
+          const runButton = document.createElement("button");
+          runButton.className = "primary";
+          runButton.type = "button";
+          runButton.textContent = "Create and Run";
+          runButton.addEventListener("click", () => {
+            void materializeCodeArtifact(artifact, { run: true });
+          });
+          actionRow.appendChild(runButton);
+        }
+      }
+
+      actionRow.append(note);
+      article.appendChild(actionRow);
+    }
+
     function createMessageMarkup(role, text) {
       return `
         <span class="label">${escapeHtml(role)}</span>
-        <div class="message-body">${escapeHtml(text).replaceAll("\n", "<br>")}</div>
+        <div class="message-body">${renderMessageBody(text)}</div>
       `;
     }
 
@@ -3456,6 +5860,7 @@
 
       article.innerHTML = createMessageMarkup("assistant", text);
       article.classList.remove("streaming");
+      attachCodeArtifactActions(article, text);
       transcriptEl.scrollTop = transcriptEl.scrollHeight;
     }
 

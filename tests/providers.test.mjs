@@ -127,7 +127,7 @@ test("OpenRouterProvider surfaces HTTP error details", async () => {
 
     await assert.rejects(
       () => provider.runTurn("hello"),
-      /Provider request failed with status 429: rate limit exceeded/i,
+      /OpenRouter request failed with status 429: rate limit exceeded/i,
     );
   } finally {
     globalThis.fetch = originalFetch;

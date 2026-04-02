@@ -11,6 +11,7 @@ import {
   parseResponsesSseToResult,
   sliceResponsesInputToLatestToolTurn,
 } from "../shared/openaiResponsesCompat.js";
+import { buildClawDevSystemPrompt } from "./systemPrompt.js";
 import { toolDefinitions, toolHandlers } from "./tools.js";
 
 export type AgentTurnResult = {
@@ -35,23 +36,12 @@ export type TurnEvent =
       callId: string;
       isError: boolean;
       contentPreview: string;
+      filePath?: string;
     };
 
 export type TurnEventHandler = (event: TurnEvent) => void;
 
 export type ProviderName = "anthropic" | "gemini" | "openai" | "openrouter" | "ollama";
-
-const SYSTEM_PROMPT = `
-You are Claw Dev, a terminal coding assistant.
-Work step by step, prefer inspecting files before editing, and use tools when needed.
-When you use tools, keep tool inputs minimal and precise.
-Assume the workspace root is the allowed boundary and do not request paths outside it.
-Default to taking action, not asking for permission, when the user gives a concrete coding request.
-For coding tasks, inspect the relevant files, form a short internal plan, and begin the work.
-Do not respond like a generic chatbot that asks broad follow-up questions such as "What changes would you like me to make?" when the user's intent is already clear.
-Only ask a clarifying question if a missing detail would materially risk doing the wrong work.
-When the user asks you to review, inspect, fix, implement, wire up, refactor, or debug something in the workspace, use the available tools and move the task forward.
-`.trim();
 
 export interface LlmProvider {
   runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult>;
@@ -75,6 +65,7 @@ export class AnthropicProvider implements LlmProvider {
   }
 
   async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
+    const systemPrompt = await buildClawDevSystemPrompt({ cwd: this.cwd, provider: "anthropic", model: this.model });
     this.messages.push({
       role: "user",
       content: prompt,
@@ -96,7 +87,7 @@ export class AnthropicProvider implements LlmProvider {
       const response = await this.client.messages.create({
         model: this.model,
         max_tokens: 2048,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: this.messages,
         tools: toolDefinitions,
       });
@@ -161,6 +152,7 @@ export class AnthropicProvider implements LlmProvider {
             callId: toolUse.id,
             isError: result.isError ?? false,
             contentPreview: summarizeToolContent(result.content),
+            ...withToolFilePath(extractToolFilePath(toolUse.name, toolUse.input as Record<string, unknown>)),
           });
           const toolResult: ToolResultBlockParam = {
             type: "tool_result",
@@ -222,6 +214,7 @@ export class GeminiProvider implements LlmProvider {
   }
 
   async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
+    const systemPrompt = await buildClawDevSystemPrompt({ cwd: this.cwd, provider: "gemini", model: this.model });
     this.contents.push({
       role: "user",
       parts: [{ text: prompt }],
@@ -244,7 +237,7 @@ export class GeminiProvider implements LlmProvider {
         model: this.model,
         contents: this.contents,
         config: {
-          systemInstruction: SYSTEM_PROMPT,
+          systemInstruction: systemPrompt,
           tools: [
             {
               functionDeclarations: toolDefinitions.map((tool) => ({
@@ -337,6 +330,7 @@ export class GeminiProvider implements LlmProvider {
             callId,
             isError: result.isError ?? false,
             contentPreview: summarizeToolContent(result.content),
+            ...withToolFilePath(extractToolFilePath(name, input)),
           });
           functionResponses.push({
             functionResponse: {
@@ -416,13 +410,15 @@ type OpenAICompatibleResponse = {
 };
 
 class OpenAICompatibleProvider implements LlmProvider {
+  private readonly providerName: ProviderName;
   private readonly model: string;
   private readonly cwd: string;
   private readonly baseUrl: string;
   private readonly apiKey: string | undefined;
   private readonly messages: OpenAICompatibleMessage[] = [];
 
-  constructor(args: { apiKey?: string; model: string; cwd: string; baseUrl: string }) {
+  constructor(args: { providerName: ProviderName; apiKey?: string; model: string; cwd: string; baseUrl: string }) {
+    this.providerName = args.providerName;
     this.model = args.model;
     this.cwd = args.cwd;
     this.baseUrl = args.baseUrl.replace(/\/$/, "");
@@ -434,6 +430,7 @@ class OpenAICompatibleProvider implements LlmProvider {
   }
 
   async runTurn(prompt: string, onEvent?: TurnEventHandler): Promise<AgentTurnResult> {
+    const systemPrompt = await buildClawDevSystemPrompt({ cwd: this.cwd, provider: this.providerName, model: this.model });
     this.messages.push({
       role: "user",
       content: prompt,
@@ -452,24 +449,28 @@ class OpenAICompatibleProvider implements LlmProvider {
         stage: "requesting",
         message: `Requesting provider response${i > 0 ? ` (pass ${i + 1})` : ""}.`,
       });
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+      const response = await fetchWithProviderTimeout(`${this.baseUrl}/chat/completions`, {
+        provider: this.providerName,
+        model: this.model,
+        init: {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: [{ role: "system", content: systemPrompt }, ...this.messages],
+            tools: toolDefinitions.map((tool) => ({
+              type: "function",
+              function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.input_schema,
+              },
+            })),
+          }),
         },
-        body: JSON.stringify({
-          model: this.model,
-          messages: [{ role: "system", content: SYSTEM_PROMPT }, ...this.messages],
-          tools: toolDefinitions.map((tool) => ({
-            type: "function",
-            function: {
-              name: tool.name,
-              description: tool.description,
-              parameters: tool.input_schema,
-            },
-          })),
-        }),
       });
 
       const json = (await response.json()) as OpenAICompatibleResponse;
@@ -558,6 +559,7 @@ class OpenAICompatibleProvider implements LlmProvider {
             callId,
             isError: result.isError ?? false,
             contentPreview: summarizeToolContent(result.content),
+            ...withToolFilePath(extractToolFilePath(name, input)),
           });
           this.messages.push({
             role: "tool",
@@ -607,6 +609,7 @@ export class OpenAIProvider implements LlmProvider {
       throw new Error(formatOpenAIAuthHint(this.auth));
     }
     const auth = this.auth;
+    const systemPrompt = await buildClawDevSystemPrompt({ cwd: this.cwd, provider: "openai", model: this.model });
 
     this.messages.push({
       role: "user",
@@ -629,8 +632,8 @@ export class OpenAIProvider implements LlmProvider {
 
       const turnResult: { assistantText: string; toolCalls: ProviderToolCall[] } =
         auth.authType === "oauth"
-          ? await this.requestChatGptResponses()
-          : await this.requestOpenAIApi();
+          ? await this.requestChatGptResponses(systemPrompt)
+          : await this.requestOpenAIApi(systemPrompt);
 
       assistantText = turnResult.assistantText || assistantText;
 
@@ -692,6 +695,7 @@ export class OpenAIProvider implements LlmProvider {
             callId,
             isError: resultContent.isError ?? false,
             contentPreview: summarizeToolContent(resultContent.content),
+            ...withToolFilePath(extractToolFilePath(name, input)),
           });
           this.messages.push({
             role: "tool",
@@ -721,7 +725,7 @@ export class OpenAIProvider implements LlmProvider {
     };
   }
 
-  private async requestChatGptResponses(): Promise<{
+  private async requestChatGptResponses(systemPrompt: string): Promise<{
     assistantText: string;
     toolCalls: ProviderToolCall[];
   }> {
@@ -740,7 +744,7 @@ export class OpenAIProvider implements LlmProvider {
       })),
     );
     const rawInput = sliceResponsesInputToLatestToolTurn(openAICompatibleMessagesToResponsesInput(this.messages));
-    const compactRequest = compactOpenAIResponsesRequest(SYSTEM_PROMPT, rawInput, responseTools);
+    const compactRequest = compactOpenAIResponsesRequest(systemPrompt, rawInput, responseTools);
 
     const response = await fetch("https://chatgpt.com/backend-api/codex/responses", {
       method: "POST",
@@ -804,7 +808,7 @@ export class OpenAIProvider implements LlmProvider {
     };
   }
 
-  private async requestOpenAIApi(): Promise<{
+  private async requestOpenAIApi(systemPrompt: string): Promise<{
     assistantText: string;
     toolCalls: ProviderToolCall[];
   }> {
@@ -820,7 +824,7 @@ export class OpenAIProvider implements LlmProvider {
       },
       body: JSON.stringify({
         model: this.model,
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...this.messages],
+        messages: [{ role: "system", content: systemPrompt }, ...this.messages],
         tools: toolDefinitions.map((tool) => ({
           type: "function",
           function: {
@@ -879,6 +883,7 @@ function resolveOpenAIReasoningEffort(model: string): "low" | "medium" | "high" 
 export class OpenRouterProvider extends OpenAICompatibleProvider {
   constructor(args: { apiKey: string; model: string; cwd: string; baseUrl?: string }) {
     super({
+      providerName: "openrouter",
       apiKey: args.apiKey,
       model: args.model,
       cwd: args.cwd,
@@ -890,6 +895,7 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
 export class OllamaProvider extends OpenAICompatibleProvider {
   constructor(args: { apiKey?: string; model: string; cwd: string; baseUrl?: string }) {
     const baseArgs = {
+      providerName: "ollama" as const,
       model: args.model,
       cwd: args.cwd,
       baseUrl: normalizeOllamaBaseUrl(args.baseUrl ?? "http://127.0.0.1:11434"),
@@ -918,6 +924,19 @@ function parseJsonRecord(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function extractToolFilePath(toolName: string, input: Record<string, unknown>): string | undefined {
+  if (toolName !== "write_file" && toolName !== "read_file") {
+    return undefined;
+  }
+
+  const filePath = input.path;
+  return typeof filePath === "string" && filePath.trim().length > 0 ? filePath.trim() : undefined;
+}
+
+function withToolFilePath(filePath: string | undefined): { filePath?: string } {
+  return filePath ? { filePath } : {};
 }
 
 function normalizeOllamaBaseUrl(baseUrl: string): string {
@@ -970,6 +989,7 @@ function formatOpenAICompatibleProviderError(
   const detail = response.error?.message?.trim();
   const normalizedBaseUrl = baseUrl.toLowerCase();
   const isOllama = normalizedBaseUrl.includes("127.0.0.1:11434") || normalizedBaseUrl.includes("localhost:11434");
+  const isOpenRouter = normalizedBaseUrl.includes("openrouter.ai");
 
   if (isOllama) {
     if (status === 404 && detail) {
@@ -981,9 +1001,71 @@ function formatOpenAICompatibleProviderError(
       : `Ollama request failed with status ${status}. Check that Ollama is running and reachable at ${baseUrl}.`;
   }
 
+  if (isOpenRouter) {
+    if (detail && /guardrail restrictions|data policy|settings\/privacy|no endpoints available/i.test(detail)) {
+      return [
+        `OpenRouter could not route model "${model}" because your current privacy or guardrail settings blocked every available endpoint.`,
+        "Open https://openrouter.ai/settings/privacy and relax the restrictions for this model, or switch to another OpenRouter model that matches your policy.",
+        `OpenRouter message: ${detail}`,
+      ].join(" ");
+    }
+
+    if (status === 404 && detail) {
+      return `OpenRouter request failed for model "${model}": ${detail}. Check the exact model id and, if needed, try the Free Models Router or another free model.`;
+    }
+
+    return detail
+      ? `OpenRouter request failed with status ${status}: ${detail}`
+      : `OpenRouter request failed with status ${status}.`;
+  }
+
   return detail
     ? `Provider request failed with status ${status}: ${detail}`
     : `Provider request failed with status ${status}.`;
+}
+
+async function fetchWithProviderTimeout(
+  url: string,
+  args: {
+    provider: ProviderName;
+    model: string;
+    init: RequestInit;
+    timeoutMs?: number;
+  },
+): Promise<Response> {
+  const timeoutMs = args.timeoutMs ?? 90000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error("provider-timeout")), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...args.init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const normalizedUrl = url.toLowerCase();
+    const isAbort = error instanceof Error && (error.name === "AbortError" || error.message === "provider-timeout");
+    if (isAbort) {
+      const label = providerTimeoutLabel(args.provider, normalizedUrl);
+      throw new Error(`${label} took too long to respond for model "${args.model}". Try again, switch models, or reduce the size of the request.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function providerTimeoutLabel(provider: ProviderName, normalizedUrl: string): string {
+  if (provider === "openrouter" || normalizedUrl.includes("openrouter.ai")) {
+    return "OpenRouter";
+  }
+  if (provider === "ollama" || normalizedUrl.includes("127.0.0.1:11434") || normalizedUrl.includes("localhost:11434")) {
+    return "Ollama";
+  }
+  if (provider === "openai") {
+    return "OpenAI";
+  }
+  return "Provider";
 }
 
 function emitTurnEvent(onEvent: TurnEventHandler | undefined, event: TurnEvent): void {

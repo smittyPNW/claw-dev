@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { execFile } from "node:child_process";
+import { exec, execFile, spawn } from "node:child_process";
 import { createReadStream, existsSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
@@ -15,6 +15,7 @@ import { getOllamaRuntimeState, saveOllamaRuntimeConfig } from "./guiOllama.js";
 import { getProviderSecretState, saveProviderSecret, type KeyBackedProvider } from "./guiSecrets.js";
 import { getTelegramSetupState, saveTelegramSetup } from "./guiTelegram.js";
 import { getUpdateCheckState, installAvailableUpdate } from "./guiUpdate.js";
+import { pickWorkspaceFolder, preparePythonWorkspaceRun } from "./guiWorkspace.js";
 import { getGuiModelGroups, getOpenRouterCatalogState, startOpenRouterHeartbeat } from "./modelCatalog.js";
 import type { ProviderName } from "./providers.js";
 
@@ -38,6 +39,51 @@ type SessionCreateRequest = {
 
 type SessionMessageRequest = {
   prompt?: string;
+};
+
+type PickFolderRequest = {
+  initialPath?: string;
+};
+
+type WorkspaceFileSaveRequest = {
+  cwd?: string;
+  path?: string;
+  content?: string;
+};
+
+type WorkspaceRunRequest = {
+  cwd?: string;
+  command?: string;
+  launchMode?: "panel" | "external";
+};
+
+type WorkspacePythonPrepareRequest = {
+  cwd?: string;
+  path?: string;
+};
+
+type WorkspaceTerminalCreateRequest = {
+  cwd?: string;
+};
+
+type WorkspaceTerminalInputRequest = {
+  input?: string;
+};
+
+type WorkspaceTerminalResizeRequest = {
+  cols?: number;
+  rows?: number;
+};
+
+type WorkspaceProcessSummary = {
+  id: string;
+  cwd: string;
+  command: string;
+  mode: "command" | "external-window" | "terminal-window";
+  status: "running" | "completed" | "failed" | "launched";
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
 };
 
 type ProviderSecretRequest = {
@@ -69,14 +115,51 @@ type SessionSummary = {
   lastPrompt: string | null;
 };
 
+type WorkspaceProcessRecord = {
+  id: string;
+  cwd: string;
+  command: string;
+  mode: "command" | "external-window" | "terminal-window";
+  status: "running" | "completed" | "failed" | "launched";
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  child: ReturnType<typeof spawn>;
+};
+
+type WorkspaceTerminalSummary = {
+  id: string;
+  cwd: string;
+  shell: string;
+  status: "running" | "exited";
+  cursor: number;
+  previewUrl: string | null;
+};
+
+type WorkspaceTerminalRecord = {
+  id: string;
+  cwd: string;
+  shell: string;
+  status: "running" | "exited";
+  cursor: number;
+  previewUrl: string | null;
+  cols: number;
+  rows: number;
+  terminal: ReturnType<typeof spawn>;
+  chunks: Array<{ cursor: number; data: string }>;
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 const indexPath = path.join(repoRoot, "index.html");
 const sessions = new Map<string, SessionRecord>();
+const workspaceProcesses = new Map<string, WorkspaceProcessRecord>();
+const workspaceTerminals = new Map<string, WorkspaceTerminalRecord>();
 
 const GUI_PORT = Number(process.env.CLAW_GUI_PORT || "4310");
 const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
 startOpenRouterHeartbeat();
 const server = createServer(async (req, res) => {
   try {
@@ -96,6 +179,7 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, {
         ok: true,
         defaultCwd: process.cwd(),
+        platform: process.platform,
         providers: [
           {
             value: "anthropic",
@@ -261,6 +345,183 @@ const server = createServer(async (req, res) => {
       });
     }
 
+    if (req.method === "POST" && url.pathname === "/api/system/pick-folder") {
+      const body = (await readJson(req)) as PickFolderRequest;
+      const selectedPath = await pickWorkspaceFolder(body.initialPath);
+      return sendJson(res, 200, {
+        ok: true,
+        path: selectedPath,
+        cancelled: selectedPath === null,
+      });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/workspace/tree") {
+      const cwd = resolveWorkspaceRoot(url.searchParams.get("cwd"));
+      return sendJson(res, 200, {
+        ok: true,
+        cwd,
+        tree: await buildWorkspaceTree(cwd),
+      });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/workspace/file") {
+      const cwd = resolveWorkspaceRoot(url.searchParams.get("cwd"));
+      const relativeFilePath = url.searchParams.get("path");
+      if (!relativeFilePath) {
+        throw httpError(400, "File path is required.");
+      }
+
+      const filePath = resolveWithinWorkspace(cwd, relativeFilePath);
+      const fileStat = await stat(filePath);
+      if (!fileStat.isFile()) {
+        throw httpError(400, "Requested path is not a file.");
+      }
+
+      return sendJson(res, 200, {
+        ok: true,
+        cwd,
+        path: path.relative(cwd, filePath),
+        content: await readFile(filePath, "utf8"),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/workspace/file") {
+      const body = (await readJson(req)) as WorkspaceFileSaveRequest;
+      const cwd = resolveWorkspaceRoot(body.cwd);
+      if (!body.path?.trim()) {
+        throw httpError(400, "File path is required.");
+      }
+      if (typeof body.content !== "string") {
+        throw httpError(400, "File content is required.");
+      }
+
+      const filePath = resolveWithinWorkspace(cwd, body.path);
+      await writeFile(filePath, body.content, "utf8");
+      return sendJson(res, 200, {
+        ok: true,
+        cwd,
+        path: path.relative(cwd, filePath),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/workspace/run") {
+      const body = (await readJson(req)) as WorkspaceRunRequest;
+      const cwd = resolveWorkspaceRoot(body.cwd);
+      const command = body.command?.trim();
+      if (!command) {
+        throw httpError(400, "Command is required.");
+      }
+
+      return sendJson(res, 200, {
+        ok: true,
+        process: await startWorkspaceProcess(cwd, command, body.launchMode ?? "panel"),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/workspace/python/prepare") {
+      const body = (await readJson(req)) as WorkspacePythonPrepareRequest;
+      const cwd = resolveWorkspaceRoot(body.cwd);
+      const relativeFilePath = body.path?.trim();
+      if (!relativeFilePath) {
+        throw httpError(400, "Python file path is required.");
+      }
+
+      const safeFilePath = resolveWithinWorkspace(cwd, relativeFilePath);
+
+      return sendJson(res, 200, {
+        ok: true,
+        python: await preparePythonWorkspaceRun(cwd, path.relative(cwd, safeFilePath)),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/workspace/terminal/start") {
+      const body = (await readJson(req)) as WorkspaceTerminalCreateRequest;
+      const cwd = resolveWorkspaceRoot(body.cwd);
+      return sendJson(res, 200, {
+        ok: true,
+        terminal: startWorkspaceTerminal(cwd),
+      });
+    }
+
+    if (req.method === "GET" && url.pathname.startsWith("/api/workspace/terminal/")) {
+      const terminalId = decodeURIComponent(url.pathname.split("/").at(-1) ?? "");
+      const terminalRecord = requireWorkspaceTerminal(terminalId);
+      const since = Number(url.searchParams.get("cursor") ?? "0");
+      return sendJson(res, 200, {
+        ok: true,
+        terminal: summarizeWorkspaceTerminal(terminalRecord),
+        output: terminalOutputSince(terminalRecord, Number.isFinite(since) ? since : 0),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname.endsWith("/input") && url.pathname.startsWith("/api/workspace/terminal/")) {
+      const terminalId = decodeURIComponent(url.pathname.split("/")[4] ?? "");
+      const body = (await readJson(req)) as WorkspaceTerminalInputRequest;
+      const terminalRecord = requireWorkspaceTerminal(terminalId);
+      if (!body.input) {
+        throw httpError(400, "Terminal input is required.");
+      }
+      terminalRecord.terminal.stdin?.write(body.input);
+      return sendJson(res, 200, {
+        ok: true,
+        terminal: summarizeWorkspaceTerminal(terminalRecord),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname.endsWith("/resize") && url.pathname.startsWith("/api/workspace/terminal/")) {
+      const terminalId = decodeURIComponent(url.pathname.split("/")[4] ?? "");
+      const body = (await readJson(req)) as WorkspaceTerminalResizeRequest;
+      const terminalRecord = requireWorkspaceTerminal(terminalId);
+      const cols = Math.max(40, Math.min(300, Math.floor(body.cols ?? terminalRecord.cols)));
+      const rows = Math.max(12, Math.min(120, Math.floor(body.rows ?? terminalRecord.rows)));
+      terminalRecord.cols = cols;
+      terminalRecord.rows = rows;
+      return sendJson(res, 200, {
+        ok: true,
+        terminal: summarizeWorkspaceTerminal(terminalRecord),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname.endsWith("/interrupt") && url.pathname.startsWith("/api/workspace/terminal/")) {
+      const terminalId = decodeURIComponent(url.pathname.split("/")[4] ?? "");
+      const terminalRecord = requireWorkspaceTerminal(terminalId);
+      terminalRecord.terminal.stdin?.write("\u0003");
+      return sendJson(res, 200, {
+        ok: true,
+        terminal: summarizeWorkspaceTerminal(terminalRecord),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname.endsWith("/stop") && url.pathname.startsWith("/api/workspace/terminal/")) {
+      const terminalId = decodeURIComponent(url.pathname.split("/")[4] ?? "");
+      const terminalRecord = requireWorkspaceTerminal(terminalId);
+      stopWorkspaceTerminal(terminalRecord);
+      return sendJson(res, 200, {
+        ok: true,
+        terminal: summarizeWorkspaceTerminal(terminalRecord),
+      });
+    }
+
+    if (req.method === "GET" && url.pathname.startsWith("/api/workspace/process/")) {
+      const processId = decodeURIComponent(url.pathname.split("/").at(-1) ?? "");
+      return sendJson(res, 200, {
+        ok: true,
+        process: summarizeWorkspaceProcess(requireWorkspaceProcess(processId)),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname.startsWith("/api/workspace/process/") && url.pathname.endsWith("/stop")) {
+      const processId = decodeURIComponent(url.pathname.split("/")[4] ?? "");
+      const processRecord = requireWorkspaceProcess(processId);
+      if (processRecord.status === "running") {
+        processRecord.child.kill("SIGTERM");
+      }
+      return sendJson(res, 200, {
+        ok: true,
+        process: summarizeWorkspaceProcess(processRecord),
+      });
+    }
+
     if (req.method === "GET" && url.pathname === "/api/sessions") {
       return sendJson(res, 200, {
         ok: true,
@@ -397,6 +658,46 @@ function listSessions(): SessionSummary[] {
   return [...sessions.values()]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .map((session) => summarizeSession(session));
+}
+
+function requireWorkspaceProcess(id: string): WorkspaceProcessRecord {
+  const processRecord = workspaceProcesses.get(id);
+  if (!processRecord) {
+    throw httpError(404, "Workspace process not found.");
+  }
+  return processRecord;
+}
+
+function requireWorkspaceTerminal(id: string): WorkspaceTerminalRecord {
+  const terminalRecord = workspaceTerminals.get(id);
+  if (!terminalRecord) {
+    throw httpError(404, "Workspace terminal not found.");
+  }
+  return terminalRecord;
+}
+
+function summarizeWorkspaceProcess(processRecord: WorkspaceProcessRecord): WorkspaceProcessSummary {
+  return {
+    id: processRecord.id,
+    cwd: processRecord.cwd,
+    command: processRecord.command,
+    mode: processRecord.mode,
+    status: processRecord.status,
+    stdout: processRecord.stdout,
+    stderr: processRecord.stderr,
+    exitCode: processRecord.exitCode,
+  };
+}
+
+function summarizeWorkspaceTerminal(terminalRecord: WorkspaceTerminalRecord): WorkspaceTerminalSummary {
+  return {
+    id: terminalRecord.id,
+    cwd: terminalRecord.cwd,
+    shell: terminalRecord.shell,
+    status: terminalRecord.status,
+    cursor: terminalRecord.cursor,
+    previewUrl: terminalRecord.previewUrl,
+  };
 }
 
 function summarizeSession(session: SessionRecord): SessionSummary {
@@ -573,7 +874,10 @@ function contentTypeFor(filePath: string): string {
       return "image/svg+xml";
     case ".css":
       return "text/css; charset=utf-8";
+    case ".html":
+      return "text/html; charset=utf-8";
     case ".js":
+    case ".mjs":
       return "application/javascript; charset=utf-8";
     case ".json":
       return "application/json; charset=utf-8";
@@ -614,4 +918,347 @@ async function runRepoScript(scriptName: string): Promise<void> {
       : "";
     throw httpError(500, stderr || stdout || `Failed to run ${scriptName}.`);
   }
+}
+
+type WorkspaceTreeNode = {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  children?: WorkspaceTreeNode[];
+};
+
+function resolveWorkspaceRoot(rawCwd?: string | null): string {
+  return rawCwd?.trim() ? path.resolve(rawCwd.trim()) : process.cwd();
+}
+
+function resolveWithinWorkspace(cwd: string, maybeRelative: string): string {
+  const resolved = path.resolve(cwd, maybeRelative);
+  const relative = path.relative(path.resolve(cwd), resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw httpError(400, `Path escapes workspace: ${maybeRelative}`);
+  }
+  return resolved;
+}
+
+async function buildWorkspaceTree(cwd: string, currentPath = cwd, depth = 0): Promise<WorkspaceTreeNode[]> {
+  if (depth > 2) {
+    return [];
+  }
+
+  const entries = await readdir(currentPath, { withFileTypes: true });
+  const visibleEntries = entries
+    .filter((entry) => !shouldIgnoreWorkspaceEntry(entry.name))
+    .sort((a, b) => {
+      if (a.isDirectory() !== b.isDirectory()) {
+        return a.isDirectory() ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, depth === 0 ? 80 : 40);
+
+  const nodes: WorkspaceTreeNode[] = [];
+  for (const entry of visibleEntries) {
+    const fullPath = path.join(currentPath, entry.name);
+    const relativePath = path.relative(cwd, fullPath);
+
+    if (entry.isDirectory()) {
+      nodes.push({
+        name: entry.name,
+        path: relativePath,
+        type: "directory",
+        children: await buildWorkspaceTree(cwd, fullPath, depth + 1),
+      });
+      continue;
+    }
+
+    nodes.push({
+      name: entry.name,
+      path: relativePath,
+      type: "file",
+    });
+  }
+
+  return nodes;
+}
+
+function shouldIgnoreWorkspaceEntry(name: string): boolean {
+  return [".git", "node_modules", "dist", ".DS_Store", ".venv"].includes(name);
+}
+
+async function runWorkspaceCommand(cwd: string, command: string): Promise<{
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  ok: boolean;
+}> {
+  try {
+    const { stdout, stderr } = await execAsync(command, {
+      cwd,
+      shell: defaultShell(),
+      timeout: 120000,
+      maxBuffer: 1024 * 1024 * 4,
+      windowsHide: true,
+    });
+    return {
+      stdout: stdout.trim(),
+      stderr: stderr.trim(),
+      exitCode: 0,
+      ok: true,
+    };
+  } catch (error) {
+    const failed = error as { stdout?: string; stderr?: string; code?: number };
+    return {
+      stdout: String(failed.stdout ?? "").trim(),
+      stderr: String(failed.stderr ?? "").trim(),
+      exitCode: Number.isInteger(failed.code) ? Number(failed.code) : 1,
+      ok: false,
+    };
+  }
+}
+
+function defaultShell(): string {
+  if (process.platform === "win32") {
+    return "powershell.exe";
+  }
+
+  return process.env.SHELL || "/bin/sh";
+}
+
+function defaultShellArgs(shellPath: string): string[] {
+  if (process.platform === "win32") {
+    return ["-NoLogo"];
+  }
+
+  const shellName = path.basename(shellPath);
+  if (shellName === "zsh" || shellName === "bash") {
+    return ["-l"];
+  }
+
+  return [];
+}
+
+function startWorkspaceTerminal(cwd: string): WorkspaceTerminalSummary {
+  const existing = [...workspaceTerminals.values()].find((terminalRecord) => terminalRecord.cwd === cwd && terminalRecord.status === "running");
+  if (existing) {
+    return summarizeWorkspaceTerminal(existing);
+  }
+
+  const shell = defaultShell();
+  const id = randomUUID();
+  const terminal = spawn(shell, defaultShellArgs(shell), {
+    cwd,
+    env: terminalEnvironment(),
+    shell: false,
+    stdio: "pipe",
+  });
+
+  const record: WorkspaceTerminalRecord = {
+    id,
+    cwd,
+    shell,
+    status: "running",
+    cursor: 0,
+    previewUrl: null,
+    cols: 120,
+    rows: 28,
+    terminal,
+    chunks: [],
+  };
+
+  workspaceTerminals.set(id, record);
+
+  terminal.stdout?.on("data", (data) => {
+    const chunk = String(data);
+    record.cursor += chunk.length;
+    record.chunks.push({ cursor: record.cursor, data: chunk });
+    if (record.chunks.length > 400) {
+      record.chunks.splice(0, record.chunks.length - 400);
+    }
+
+    const detectedPreviewUrl = detectPreviewUrl(chunk);
+    if (detectedPreviewUrl) {
+      record.previewUrl = detectedPreviewUrl;
+    }
+  });
+
+  terminal.stderr?.on("data", (data) => {
+    const chunk = String(data);
+    record.cursor += chunk.length;
+    record.chunks.push({ cursor: record.cursor, data: chunk });
+    if (record.chunks.length > 400) {
+      record.chunks.splice(0, record.chunks.length - 400);
+    }
+
+    const detectedPreviewUrl = detectPreviewUrl(chunk);
+    if (detectedPreviewUrl) {
+      record.previewUrl = detectedPreviewUrl;
+    }
+  });
+
+  terminal.on("close", () => {
+    record.status = "exited";
+  });
+
+  terminal.stdin?.write("printf 'Claw Dev workspace shell ready\\n'\n");
+
+  return summarizeWorkspaceTerminal(record);
+}
+
+function stopWorkspaceTerminal(terminalRecord: WorkspaceTerminalRecord): void {
+  if (terminalRecord.status === "running") {
+    terminalRecord.terminal.kill("SIGTERM");
+    terminalRecord.status = "exited";
+  }
+}
+
+function terminalOutputSince(terminalRecord: WorkspaceTerminalRecord, cursor: number): { chunk: string; cursor: number } {
+  const safeCursor = Math.max(0, cursor);
+  const chunk = terminalRecord.chunks
+    .filter((entry) => entry.cursor > safeCursor)
+    .map((entry) => entry.data)
+    .join("");
+
+  return {
+    chunk,
+    cursor: terminalRecord.cursor,
+  };
+}
+
+function detectPreviewUrl(output: string): string | null {
+  const match = output.match(/https?:\/\/(?:127\.0\.0\.1|localhost|0\.0\.0\.0):\d{2,5}(?:\/[^\s]*)?/i);
+  if (!match) {
+    return null;
+  }
+
+  return match[0].replace("0.0.0.0", "127.0.0.1");
+}
+
+function terminalEnvironment(): Record<string, string> {
+  const envEntries = Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string");
+  return {
+    TERM: "xterm-256color",
+    CLICOLOR_FORCE: "1",
+    ...Object.fromEntries(envEntries),
+  };
+}
+
+async function startWorkspaceProcess(cwd: string, command: string, launchMode: "panel" | "external"): Promise<WorkspaceProcessSummary> {
+  const inferredMode = await inferWorkspaceRunMode(cwd, command);
+
+  if (launchMode === "external" && process.platform === "darwin") {
+    await launchInTerminalWindow(cwd, command);
+    return {
+      id: randomUUID(),
+      cwd,
+      command,
+      mode: inferredMode === "external-window" ? "external-window" : "terminal-window",
+      status: "launched",
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+    };
+  }
+
+  const mode = inferredMode;
+  const id = randomUUID();
+  const child = spawn(command, {
+    cwd,
+    shell: defaultShell(),
+    windowsHide: true,
+    detached: false,
+    env: process.env,
+  });
+
+  const record: WorkspaceProcessRecord = {
+    id,
+    cwd,
+    command,
+    mode,
+    status: "running",
+    stdout: "",
+    stderr: "",
+    exitCode: null,
+    child,
+  };
+
+  workspaceProcesses.set(id, record);
+
+  child.stdout?.on("data", (chunk) => {
+    record.stdout = trimProcessLog(`${record.stdout}${String(chunk)}`);
+  });
+
+  child.stderr?.on("data", (chunk) => {
+    record.stderr = trimProcessLog(`${record.stderr}${String(chunk)}`);
+  });
+
+  child.on("error", (error) => {
+    record.stderr = trimProcessLog(`${record.stderr}\n${error.message}`.trim());
+    record.status = "failed";
+    record.exitCode = 1;
+  });
+
+  child.on("close", (code) => {
+    record.exitCode = Number.isInteger(code) ? Number(code) : 0;
+    record.status = record.exitCode === 0 ? "completed" : "failed";
+  });
+
+  await delay(120);
+  return summarizeWorkspaceProcess(record);
+}
+
+async function inferWorkspaceRunMode(cwd: string, command: string): Promise<"command" | "external-window"> {
+  const match = command.match(/(?:python3?|node|npx\s+tsx)\s+"?([^"\n]+)"?/i);
+  const candidatePath = match?.[1]?.trim();
+  if (!candidatePath) {
+    return "command";
+  }
+
+  const fullPath = resolveWithinWorkspace(cwd, candidatePath);
+  try {
+    const content = await readFile(fullPath, "utf8");
+    const lower = content.toLowerCase();
+    if (
+      lower.includes("import pygame")
+      || lower.includes("from pygame")
+      || lower.includes("import tkinter")
+      || lower.includes("from tkinter")
+      || lower.includes("import turtle")
+      || lower.includes("from turtle")
+      || lower.includes("import pyglet")
+      || lower.includes("import arcade")
+      || lower.includes("import pyxel")
+    ) {
+      return "external-window";
+    }
+  } catch {
+    return "command";
+  }
+
+  return "command";
+}
+
+function trimProcessLog(content: string): string {
+  return content.slice(-20000);
+}
+
+async function launchInTerminalWindow(cwd: string, command: string): Promise<void> {
+  const shellCommand = `cd ${shellSingleQuote(cwd)} && ${command}`;
+  await execFileAsync("osascript", [
+    "-e",
+    'tell application "Terminal"',
+    "-e",
+    "activate",
+    "-e",
+    `do script ${appleScriptString(shellCommand)}`,
+    "-e",
+    "end tell",
+  ]);
+}
+
+function shellSingleQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\"'\"'`)}'`;
+}
+
+function appleScriptString(value: string): string {
+  return `"${value.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"")}"`;
 }

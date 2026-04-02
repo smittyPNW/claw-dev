@@ -24,8 +24,10 @@ export type ToolResult = {
 export type ToolHandler = (input: Record<string, unknown>, cwd: string) => Promise<ToolResult>;
 
 function resolveWithinCwd(cwd: string, maybeRelative: string): string {
-  const resolved = path.resolve(cwd, maybeRelative);
-  if (!resolved.startsWith(path.resolve(cwd))) {
+  const root = path.resolve(cwd);
+  const resolved = path.resolve(root, maybeRelative);
+  const relative = path.relative(root, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error(`Path escapes working directory: ${maybeRelative}`);
   }
   return resolved;
@@ -108,7 +110,7 @@ function defaultShell(): string {
 export const toolDefinitions: ToolDefinition[] = [
   {
     name: "list_files",
-    description: "List files and directories inside a path relative to the current workspace.",
+    description: "Inspect the workspace by listing files and directories at a relative path. Use this first to orient yourself before editing.",
     input_schema: {
       type: "object",
       properties: {
@@ -118,7 +120,7 @@ export const toolDefinitions: ToolDefinition[] = [
   },
   {
     name: "read_file",
-    description: "Read a UTF-8 text file from the workspace.",
+    description: "Read a UTF-8 text file from the workspace so you can understand existing code before changing it.",
     input_schema: {
       type: "object",
       properties: {
@@ -129,7 +131,7 @@ export const toolDefinitions: ToolDefinition[] = [
   },
   {
     name: "write_file",
-    description: "Write a UTF-8 text file inside the workspace.",
+    description: "Create or fully replace a UTF-8 text file inside the workspace. Use this whenever the user asked for code or a file should exist in the workspace, rather than leaving the implementation only in chat.",
     input_schema: {
       type: "object",
       properties: {
@@ -141,7 +143,7 @@ export const toolDefinitions: ToolDefinition[] = [
   },
   {
     name: "search_text",
-    description: "Search for text using ripgrep in the workspace.",
+    description: "Search the workspace with ripgrep to find implementations, symbols, references, or configuration quickly.",
     input_schema: {
       type: "object",
       properties: {
@@ -153,7 +155,7 @@ export const toolDefinitions: ToolDefinition[] = [
   },
   {
     name: "run_shell",
-    description: "Run a shell command in the current workspace and capture stdout and stderr.",
+    description: "Run a shell command in the workspace to validate code, inspect the environment, run tests, or execute programs.",
     input_schema: {
       type: "object",
       properties: {
